@@ -11,7 +11,10 @@ export const metadata: Metadata = {
     title: 'Hayya Falah',
   },
   icons: {
-    icon: '/icon.svg',
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
     apple: '/apple-icon.png',
   },
 };
