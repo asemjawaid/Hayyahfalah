@@ -139,6 +139,7 @@ export interface ZakatPayment {
 }
 
 export type MemberRelationship = 'child' | 'student' | 'spouse' | 'sibling' | 'parent' | 'other';
+export type LinkStatus = 'local' | 'pending' | 'linked';
 
 export interface MemberProfile {
   id: string;
@@ -146,6 +147,12 @@ export interface MemberProfile {
   emoji: string;
   relationship: MemberRelationship;
   gender: Gender;
+  /** Email the owner entered for this member — used to request linking */
+  linkedEmail?: string;
+  /** Supabase user ID once the link is confirmed */
+  linkedUserId?: string;
+  /** 'local' = no email, 'pending' = email stored awaiting confirmation, 'linked' = confirmed */
+  linkStatus?: LinkStatus;
   createdAt: string;
 }
 

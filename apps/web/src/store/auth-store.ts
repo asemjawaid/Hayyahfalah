@@ -37,6 +37,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ isSyncing: true });
         await pullFromCloud(user.id);
         set({ isSyncing: false });
+        // Ensure profile row exists in Supabase
+        upsertProfile(data.user.id, data.user.email ?? '');
       }
     } catch {
       // No session — that's fine
@@ -54,6 +56,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         await pushAllToCloud(user.id);
         await pullFromCloud(user.id);
         set({ isSyncing: false });
+        // Ensure profile row exists
+        upsertProfile(session.user.id, session.user.email ?? '');
+        // Clear skip flag now that user has signed in
+        if (typeof window !== 'undefined') localStorage.removeItem('auth_skipped');
       } else if (event === 'SIGNED_OUT') {
         setSyncUser(null);
         set({ user: null });
@@ -73,8 +79,33 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: async () => {
     await signOut();
+    // Remove skip flag so next open prompts sign-in again
+    if (typeof window !== 'undefined') localStorage.removeItem('auth_skipped');
     set({ user: null, emailSent: false });
   },
 
   resetEmailSent: () => set({ emailSent: false }),
 }));
+
+/** Fire-and-forget: ensure a row in `profiles` table exists for this user */
+function upsertProfile(userId: string, email: string): void {
+  // First 8 hex chars of the UUID — shareable profile code
+  const profileCode = userId.replace(/-/g, '').slice(0, 8).toUpperCase();
+  void (async () => {
+    try {
+      await supabase
+        .from('profiles')
+        .upsert(
+          { id: userId, email, profile_code: profileCode, updated_at: new Date().toISOString() },
+          { onConflict: 'id', ignoreDuplicates: false }
+        );
+    } catch {
+      // Best-effort — non-critical
+    }
+  })();
+}
+
+/** Get the current user's shareable profile code (first 8 chars of UUID) */
+export function getProfileCode(userId: string): string {
+  return userId.replace(/-/g, '').slice(0, 8).toUpperCase();
+}

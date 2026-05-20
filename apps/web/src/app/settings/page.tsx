@@ -246,11 +246,34 @@ function ProfileSection({ profile, onBack, onSave }: any) {
           {user ? (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-[var(--text-secondary)] text-sm">{user.email}</div>
-                  <div className="text-[var(--accent-primary)] text-xs">✓ Signed in — data syncs automatically</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[var(--text-secondary)] text-sm truncate">{user.email}</div>
+                  <div className="text-[var(--accent-primary)] text-xs mt-0.5">✓ Signed in — data syncs automatically</div>
                 </div>
               </div>
+
+              {/* Profile Code — share this to let family members link to you */}
+              <div className="bg-[var(--bg-tertiary)] rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[var(--text-tertiary)] text-[10px] uppercase tracking-wide">Your Profile Code</div>
+                  <div className="font-mono text-[var(--accent-primary)] text-lg tracking-widest mt-0.5">
+                    {user.id.replace(/-/g, '').slice(0, 8).toUpperCase()}
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    const code = user.id.replace(/-/g, '').slice(0, 8).toUpperCase();
+                    navigator.clipboard.writeText(code).catch(() => {});
+                  }}
+                  className="text-[var(--text-tertiary)] text-xs border border-[var(--bg-secondary)] px-2.5 py-1.5 rounded-lg hover:text-[var(--text-secondary)] transition-colors"
+                >
+                  Copy
+                </button>
+              </div>
+              <p className="text-[var(--text-tertiary)] text-[11px] leading-relaxed">
+                Share this code with family members so they can identify your account when adding you.
+              </p>
+
               <button
                 onClick={async () => { await logout(); }}
                 className="w-full py-2.5 border border-[var(--bg-tertiary)] text-[var(--text-tertiary)] rounded-xl text-sm hover:border-red-400 hover:text-red-400 transition-colors"

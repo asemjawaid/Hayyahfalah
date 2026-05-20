@@ -8,7 +8,7 @@ import { useFamilyStore } from '@/store/family-store';
 import { BottomNav } from '@/components/ui/nav';
 import { todayString } from '@/lib/utils';
 import { cn } from '@/lib/utils';
-import type { MemberRelationship, Gender, PrayerName, PrayerStatus } from '@/lib/db';
+import type { MemberRelationship, Gender, PrayerName, PrayerStatus, LinkStatus } from '@/lib/db';
 
 const PRAYERS: PrayerName[] = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
 
@@ -32,6 +32,12 @@ const STATUS_COLOR: Record<PrayerStatus, string> = {
 };
 
 const AVATARS = ['😊','🌙','⭐','🌸','🌿','🦋','🌺','🕊️','🌟','🦁','🌈','🍃'];
+
+const LINK_STATUS_BADGE: Record<LinkStatus, { label: string; color: string }> = {
+  local:   { label: 'Local only',    color: 'text-[var(--text-tertiary)] bg-[var(--bg-tertiary)]' },
+  pending: { label: '📨 Invite sent', color: 'text-amber-400 bg-amber-400/10' },
+  linked:  { label: '✓ Linked',       color: 'text-emerald-400 bg-emerald-400/10' },
+};
 
 export default function FamilyPage() {
   const { profiles, memberLogs, loadProfiles, loadLogsForDate, removeProfile } = useFamilyStore();
@@ -109,11 +115,19 @@ export default function FamilyPage() {
                     {profile.emoji}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-[var(--text-primary)] truncate">{profile.name}</span>
                       <span className="text-[10px] text-[var(--text-tertiary)] bg-[var(--bg-tertiary)] px-2 py-0.5 rounded-full whitespace-nowrap">
                         {rel.emoji} {rel.label}
                       </span>
+                      {profile.linkStatus && profile.linkStatus !== 'local' && (() => {
+                        const badge = LINK_STATUS_BADGE[profile.linkStatus!];
+                        return (
+                          <span className={cn('text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap', badge.color)}>
+                            {badge.label}
+                          </span>
+                        );
+                      })()}
                     </div>
                     {/* Prayer dots */}
                     <div className="flex items-center gap-1.5 mt-1.5">
@@ -180,12 +194,21 @@ function AddMemberModal({ onClose, onDone }: { onClose: () => void; onDone: () =
   const [relationship, setRelationship] = useState<MemberRelationship>('child');
   const [gender, setGender] = useState<Gender>('male');
   const [emoji, setEmoji] = useState('😊');
+  const [linkedEmail, setLinkedEmail] = useState('');
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
     if (!name.trim()) return;
     setSaving(true);
-    await addProfile({ name: name.trim(), emoji, relationship, gender });
+    const email = linkedEmail.trim();
+    await addProfile({
+      name: name.trim(),
+      emoji,
+      relationship,
+      gender,
+      linkedEmail: email || undefined,
+      linkStatus: email ? 'pending' : 'local',
+    });
     setSaving(false);
     onDone();
   }
@@ -240,6 +263,25 @@ function AddMemberModal({ onClose, onDone }: { onClose: () => void; onDone: () =
             placeholder="e.g. Aisha, Ahmad, Student 1"
             className="w-full px-4 py-3 rounded-xl bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none"
           />
+        </div>
+
+        {/* Email link (optional) */}
+        <div>
+          <label className="text-[var(--text-secondary)] text-xs uppercase tracking-wide mb-1 block">
+            Their email <span className="text-[var(--text-tertiary)] normal-case">(optional — links to their account)</span>
+          </label>
+          <input
+            type="email"
+            inputMode="email"
+            value={linkedEmail}
+            onChange={e => setLinkedEmail(e.target.value)}
+            placeholder="family@email.com"
+            className="w-full px-4 py-3 rounded-xl bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none"
+          />
+          <p className="text-[var(--text-tertiary)] text-[11px] mt-1 leading-relaxed">
+            When they sign in on their device, their data syncs to their own account.
+            Entering their email here lets you identify their real profile.
+          </p>
         </div>
 
         {/* Relationship */}
