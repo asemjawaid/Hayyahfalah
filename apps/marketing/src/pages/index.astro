@@ -1,0 +1,153 @@
+---
+const features = [
+  { icon: '🕌', title: 'Prayer Tracking', desc: 'Log all 5 daily prayers with nuance — on time, late, in jamaah, or as Qaza.' },
+  { icon: '📿', title: 'Qaza Ledger', desc: 'Automatically tracks missed prayers. Make-ups decrement the balance — gentle, never shaming.' },
+  { icon: '🌙', title: 'Hijri Calendar', desc: 'Proactive reminders for Sunnah fasts, White Days, Ashura, Day of Arafah, and all Islamic events.' },
+  { icon: '🧭', title: 'Qibla Compass', desc: 'Device magnetometer-based Qibla direction with distance to Makkah.' },
+  { icon: '🕋', title: 'Mosque Finder', desc: 'Find nearby masjids, iqamah times, and Jumu\'ah services.' },
+  { icon: '🔒', title: 'Privacy First', desc: 'All data stays on your device. End-to-end encrypted sync is optional. No tracking. No ads. Ever.' },
+];
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hayya Falah — Come to Success</title>
+  <meta name="description" content="A privacy-first Muslim worship companion. No ads, no tracking, your data stays yours. Prayer times, Qaza ledger, Hijri calendar, and more." />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0D1421;
+      --bg2: #1A2238;
+      --bg3: #2D3654;
+      --accent: #D4A574;
+      --accent2: #B8854A;
+      --text: #F4EDE4;
+      --text2: rgba(244, 237, 228, 0.7);
+      --text3: rgba(244, 237, 228, 0.5);
+    }
+    body { background: var(--bg); color: var(--text); font-family: 'Inter Tight', Inter, system-ui, sans-serif; }
+    a { color: var(--accent); text-decoration: none; }
+    .container { max-width: 900px; margin: 0 auto; padding: 0 24px; }
+    nav { padding: 20px 0; border-bottom: 1px solid var(--bg3); }
+    nav .inner { display: flex; align-items: center; justify-content: space-between; }
+    nav .logo { font-family: Georgia, serif; font-size: 20px; color: var(--accent); }
+    nav .links { display: flex; gap: 24px; font-size: 14px; color: var(--text2); }
+    .hero { padding: 100px 0 80px; text-align: center; }
+    .arabic { font-family: 'Amiri', 'Traditional Arabic', serif; font-size: 3rem; color: var(--accent); line-height: 1.6; }
+    h1 { font-family: Georgia, serif; font-size: 3.5rem; font-weight: 400; margin: 16px 0 8px; }
+    .tagline { color: var(--text2); font-size: 1.2rem; font-style: italic; }
+    .promise { display: flex; gap: 32px; justify-content: center; margin: 40px 0; font-size: 15px; color: var(--text2); flex-wrap: wrap; }
+    .promise span::before { content: '✓ '; color: var(--accent); }
+    .cta-group { display: flex; gap: 12px; justify-content: center; margin-top: 40px; flex-wrap: wrap; }
+    .btn { padding: 14px 32px; border-radius: 12px; font-size: 16px; font-weight: 600; transition: opacity 0.2s; cursor: pointer; }
+    .btn-primary { background: var(--accent); color: #0D1421; }
+    .btn-secondary { background: transparent; border: 1px solid var(--bg3); color: var(--text2); }
+    .btn:hover { opacity: 0.85; }
+    .features { padding: 80px 0; }
+    .features h2 { font-family: Georgia, serif; font-size: 2rem; text-align: center; margin-bottom: 48px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+    .card { background: var(--bg2); border-radius: 16px; padding: 24px; }
+    .card .icon { font-size: 2rem; margin-bottom: 12px; }
+    .card h3 { font-size: 1.1rem; margin-bottom: 8px; }
+    .card p { color: var(--text2); font-size: 14px; line-height: 1.6; }
+    .values { background: var(--bg2); padding: 80px 0; }
+    .values h2 { font-family: Georgia, serif; font-size: 2rem; text-align: center; margin-bottom: 48px; }
+    .value-list { max-width: 600px; margin: 0 auto; space-y: 16px; }
+    .value-item { display: flex; align-items: start; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--bg3); }
+    .value-item .num { color: var(--accent); font-size: 1.5rem; font-weight: bold; min-width: 32px; }
+    .value-item p { color: var(--text2); font-size: 14px; line-height: 1.6; }
+    .value-item strong { color: var(--text); display: block; margin-bottom: 4px; }
+    footer { padding: 48px 0; border-top: 1px solid var(--bg3); text-align: center; color: var(--text3); font-size: 13px; }
+    footer .footer-links { display: flex; gap: 24px; justify-content: center; margin-bottom: 16px; }
+    @media (max-width: 600px) { h1 { font-size: 2.5rem; } .arabic { font-size: 2rem; } }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="container">
+      <div class="inner">
+        <span class="logo">Hayya Falah</span>
+        <div class="links">
+          <a href="/features">Features</a>
+          <a href="/privacy">Privacy</a>
+          <a href="/transparency">Transparency</a>
+          <a href="/support">Support</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="container">
+      <div class="arabic">حَيَّ عَلَى الْفَلَاح</div>
+      <h1>Come to success.</h1>
+      <p class="tagline">A Muslim worship companion that respects your privacy and your deen.</p>
+
+      <div class="promise">
+        <span>No ads, ever</span>
+        <span>No tracking</span>
+        <span>Pay what you want</span>
+      </div>
+
+      <div class="cta-group">
+        <a href="/app" class="btn btn-primary">Open Web App</a>
+        <a href="#features" class="btn btn-secondary">Learn more</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="features" id="features">
+    <div class="container">
+      <h2>Built for your worship, not for our revenue</h2>
+      <div class="grid">
+        {features.map(f => (
+          <div class="card">
+            <div class="icon">{f.icon}</div>
+            <h3>{f.title}</h3>
+            <p>{f.desc}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="values">
+    <div class="container">
+      <h2>Five non-negotiable promises</h2>
+      <div class="value-list">
+        {[
+          { title: 'Zero ads, ever.', body: 'No banner ads, interstitials, native ads, sponsored content, or affiliate promotions. No exceptions.' },
+          { title: 'No data sale, no third-party tracking.', body: 'Your data is never sold, brokered, shared with advertisers, or licensed. Anonymous, opt-in telemetry only.' },
+          { title: 'Offline-first.', body: 'Prayer times, prayer logging, Qaza ledger, Hijri calendar — all work fully without internet.' },
+          { title: 'Pay what you want.', body: 'All features are free for all users, forever. No paywalls, no premium tier, no feature gating.' },
+          { title: 'Dignified, never shaming.', body: 'No streaks that punish lapses. No guilt notifications. Tone is gentle and mercy-first.' },
+        ].map((v, i) => (
+          <div class="value-item">
+            <span class="num">{i + 1}</span>
+            <div>
+              <strong>{v.title}</strong>
+              <p>{v.body}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      <div class="footer-links">
+        <a href="/privacy">Privacy Policy</a>
+        <a href="/transparency">Transparency</a>
+        <a href="/support">Support</a>
+        <a href="https://pay.hayyafalah.app">Support Us</a>
+      </div>
+      <p>Hayya Falah — حَيَّ عَلَى الْفَلَاح — Come to success</p>
+      <p style="margin-top: 8px;">May Allah accept this work as sadaqah jariyah. آمين</p>
+    </div>
+  </footer>
+</body>
+</html>

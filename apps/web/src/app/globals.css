@@ -1,0 +1,145 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400&family=Inter+Tight:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Amiri:ital,wght@0,400;0,700;1,400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-primary: #0D1421;
+  --bg-secondary: #1A2238;
+  --bg-tertiary: #2D3654;
+  --accent-primary: #D4A574;
+  --accent-secondary: #B8854A;
+  --text-primary: #F4EDE4;
+  --text-secondary: rgba(244, 237, 228, 0.7);
+  --text-tertiary: rgba(244, 237, 228, 0.5);
+}
+
+[data-theme="fajr_light"] {
+  --bg-primary: #FDF6EC;
+  --bg-secondary: #F5E7D0;
+  --bg-tertiary: #E8D4B8;
+  --accent-primary: #B8854A;
+  --accent-secondary: #8B4513;
+  --text-primary: #1A2238;
+  --text-secondary: rgba(26, 34, 56, 0.7);
+  --text-tertiary: rgba(26, 34, 56, 0.5);
+}
+
+[data-theme="midnight_dark"] {
+  --bg-primary: #080C14;
+  --bg-secondary: #0F1520;
+  --bg-tertiary: #1A2236;
+  --accent-primary: #7B8FD4;
+  --accent-secondary: #5A6DBF;
+  --text-primary: #E8ECF8;
+  --text-secondary: rgba(232, 236, 248, 0.7);
+  --text-tertiary: rgba(232, 236, 248, 0.5);
+}
+
+[data-theme="verdant_dark"] {
+  --bg-primary: #0A1510;
+  --bg-secondary: #122018;
+  --bg-tertiary: #1E3326;
+  --accent-primary: #5FB87A;
+  --accent-secondary: #3A9456;
+  --text-primary: #E8F4EC;
+  --text-secondary: rgba(232, 244, 236, 0.7);
+  --text-tertiary: rgba(232, 244, 236, 0.5);
+}
+
+[data-theme="clay_dark"] {
+  --bg-primary: #1A0E08;
+  --bg-secondary: #2A1A10;
+  --bg-tertiary: #3D2818;
+  --accent-primary: #E8995A;
+  --accent-secondary: #C8743A;
+  --text-primary: #F8EEE6;
+  --text-secondary: rgba(248, 238, 230, 0.7);
+  --text-tertiary: rgba(248, 238, 230, 0.5);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  font-family: 'Inter Tight', Inter, system-ui, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+#__next,
+main {
+  min-height: 100vh;
+}
+
+.font-display {
+  font-family: 'Fraunces', 'Cormorant Garamond', Georgia, serif;
+}
+
+.font-arabic {
+  font-family: 'Amiri', 'Traditional Arabic', serif;
+}
+
+/* Prayer status indicator dots */
+.prayer-dot {
+  @apply w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200;
+}
+
+.prayer-dot-empty {
+  @apply border-2 border-[var(--text-tertiary)];
+}
+
+.prayer-dot-on_time {
+  @apply bg-[var(--accent-primary)];
+}
+
+.prayer-dot-late {
+  @apply bg-[var(--accent-secondary)] bg-opacity-70;
+}
+
+.prayer-dot-jamaah {
+  @apply bg-[var(--accent-primary)] ring-2 ring-[var(--accent-primary)] ring-offset-2 ring-offset-[var(--bg-primary)];
+}
+
+.prayer-dot-qaza {
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+  @apply opacity-80;
+}
+
+.prayer-dot-missed {
+  @apply bg-transparent border-2 border-red-400 border-dashed;
+}
+
+.prayer-dot-excused {
+  @apply bg-[var(--bg-tertiary)] border-2 border-[var(--text-tertiary)];
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--accent-secondary);
+  border-radius: 2px;
+}
+
+/* Smooth page transitions */
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.page-enter {
+  animation: pageIn 0.25s ease-out;
+}

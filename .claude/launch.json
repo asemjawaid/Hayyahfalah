@@ -1,0 +1,34 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Web App (Next.js PWA)",
+      "runtimeExecutable": "/tmp/node-v22.13.1-darwin-x64/bin/node",
+      "runtimeArgs": ["../../node_modules/.bin/next", "dev"],
+      "cwd": "apps/web",
+      "port": 3000,
+      "autoPort": true
+    },
+    {
+      "name": "Marketing Site (Astro)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "apps/marketing",
+      "port": 3001
+    },
+    {
+      "name": "Payments Site (Next.js)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "apps/payments",
+      "port": 3002
+    },
+    {
+      "name": "All (Turbo — all workspaces)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": ".",
+      "port": 3000
+    }
+  ]
+}
