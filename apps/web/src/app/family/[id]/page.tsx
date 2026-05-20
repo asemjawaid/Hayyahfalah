@@ -9,7 +9,7 @@ import { useFamilyStore } from '@/store/family-store';
 import { usePrayerTimesStore } from '@/store/prayer-times-store';
 import { BottomNav } from '@/components/ui/nav';
 import { cn } from '@/lib/utils';
-import { formatPrayerTime } from '@hayyafalah/prayer-engine';
+import { formatPrayerTime } from '@/lib/prayer-engine';
 import type { PrayerName, PrayerStatus, MemberPrayerLog } from '@/lib/db';
 
 const PRAYERS: PrayerName[] = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];

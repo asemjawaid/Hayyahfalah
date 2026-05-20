@@ -10,7 +10,6 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@hayyafalah/prayer-engine": "*",
     "adhan": "^4.4.3",
     "clsx": "^2.1.1",
     "date-fns": "^4.2.1",

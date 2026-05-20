@@ -17,7 +17,7 @@ import { formatHijriDate } from '@/lib/hijri';
 import { getPrayerLabel } from '@/lib/terminology';
 import { todayString, formatDate } from '@/lib/utils';
 import type { PrayerName, PrayerStatus } from '@/lib/db';
-import { formatPrayerTime } from '@hayyafalah/prayer-engine';
+import { formatPrayerTime } from '@/lib/prayer-engine';
 import { db, getActiveCycle, endCycle, startCycle, getPrayerStreak } from '@/lib/db';
 import { cn } from '@/lib/utils';
 

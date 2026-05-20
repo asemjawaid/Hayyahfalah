@@ -7,7 +7,7 @@ import { BottomNav } from '@/components/ui/nav';
 import { db, logFast, getFastingLogsForMonth, type FastingLog, type FastType, type FastStatus } from '@/lib/db';
 import { formatHijriDate, toHijri, isSunnahFastDay, isWhiteDay } from '@/lib/hijri';
 import { usePrayerTimesStore } from '@/store/prayer-times-store';
-import { formatPrayerTime } from '@hayyafalah/prayer-engine';
+import { formatPrayerTime } from '@/lib/prayer-engine';
 import { cn } from '@/lib/utils';
 import { todayString } from '@/lib/utils';
 

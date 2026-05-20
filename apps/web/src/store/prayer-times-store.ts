@@ -1,9 +1,9 @@
 'use client';
 
 import { create } from 'zustand';
-import type { PrayerTimesResult } from '@hayyafalah/prayer-engine';
-import { calculatePrayerTimes, getCurrentPrayer, getNextPrayer, getTimeUntil, formatPrayerTime } from '@hayyafalah/prayer-engine';
-import type { CalculationMethodKey } from '@hayyafalah/prayer-engine';
+import type { PrayerTimesResult } from '@/lib/prayer-engine';
+import { calculatePrayerTimes, getCurrentPrayer, getNextPrayer, getTimeUntil, formatPrayerTime } from '@/lib/prayer-engine';
+import type { CalculationMethodKey } from '@/lib/prayer-engine';
 
 interface PrayerTimesState {
   times: PrayerTimesResult | null;

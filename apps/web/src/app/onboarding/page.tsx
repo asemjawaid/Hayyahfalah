@@ -6,7 +6,7 @@ import { useUserStore, defaultProfile } from '@/store/user-store';
 import { usePrayerTimesStore } from '@/store/prayer-times-store';
 import { saveProfile } from '@/lib/db';
 import type { Madhab, Theme, Terminology } from '@/lib/db';
-import { CALCULATION_METHOD_LABELS, type CalculationMethodKey } from '@hayyafalah/prayer-engine';
+import { CALCULATION_METHOD_LABELS, type CalculationMethodKey } from '@/lib/prayer-engine';
 import { cn } from '@/lib/utils';
 import { MapPin, Settings, Moon, Sun, ChevronRight, Check } from 'lucide-react';
 

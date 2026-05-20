@@ -8,7 +8,7 @@ import {
 import { BottomNav } from '@/components/ui/nav';
 import { useUserStore } from '@/store/user-store';
 import { saveProfile } from '@/lib/db';
-import { CALCULATION_METHOD_LABELS, type CalculationMethodKey } from '@hayyafalah/prayer-engine';
+import { CALCULATION_METHOD_LABELS, type CalculationMethodKey } from '@/lib/prayer-engine';
 import { cn } from '@/lib/utils';
 import type { Theme, Madhab, Terminology, Gender } from '@/lib/db';
 import { db } from '@/lib/db';

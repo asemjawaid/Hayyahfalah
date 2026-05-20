@@ -8,8 +8,8 @@ import type { PrayerName, PrayerStatus, PrayerLog } from '@/lib/db';
 import { usePrayerStore } from '@/store/prayer-store';
 import { getPrayerLabel } from '@/lib/terminology';
 import type { Terminology } from '@/lib/db';
-import { formatPrayerTime } from '@hayyafalah/prayer-engine';
-import type { PrayerTimesResult } from '@hayyafalah/prayer-engine';
+import { formatPrayerTime } from '@/lib/prayer-engine';
+import type { PrayerTimesResult } from '@/lib/prayer-engine';
 
 const PRAYERS: PrayerName[] = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
 

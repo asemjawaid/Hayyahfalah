@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { Compass, MapPin } from 'lucide-react';
 import { BottomNav } from '@/components/ui/nav';
 import { usePrayerTimesStore } from '@/store/prayer-times-store';
-import { getQiblaDirection } from '@hayyafalah/prayer-engine';
+import { getQiblaDirection } from '@/lib/prayer-engine';
 import { cn } from '@/lib/utils';
 
 const MAKKAH_LAT = 21.3891;
