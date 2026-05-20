@@ -8,7 +8,7 @@ import { saveProfile } from '@/lib/db';
 import type { Madhab, Theme, Terminology } from '@/lib/db';
 import { CALCULATION_METHOD_LABELS, type CalculationMethodKey } from '@/lib/prayer-engine';
 import { cn } from '@/lib/utils';
-import { MapPin, Settings, Moon, Sun, ChevronRight, Check } from 'lucide-react';
+import { MapPin, Search, Check } from 'lucide-react';
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
@@ -102,13 +102,13 @@ export default function OnboardingPage() {
   }
 
   async function handleLocation() {
-    await locate();
+    await locate(); // now truly awaits GPS callback
     setData(d => ({ ...d, locationGranted: true }));
     next();
   }
 
-  function handleManualLocation() {
-    setManualLocation(21.3891, 39.8579, 'Makkah');
+  function handleManualLocation(lat: number, lng: number, city: string) {
+    setManualLocation(lat, lng, city);
     setData(d => ({ ...d, locationGranted: false }));
     next();
   }
@@ -135,6 +135,7 @@ export default function OnboardingPage() {
           {step === 2 && <StepLanguage value={data.language ?? 'en'} onChange={l => setData(d => ({ ...d, language: l }))} onNext={next} />}
           {step === 3 && <StepTheme value={data.theme ?? 'fajr_dark'} onChange={applyTheme} onNext={next} />}
           {step === 4 && <StepLocation onAllow={handleLocation} onManual={handleManualLocation} />}
+
           {step === 5 && <StepMethod value={data.calculationMethod ?? 'MuslimWorldLeague'} madhab={data.madhab ?? 'shafii'} onChange={(m, md) => setData(d => ({ ...d, calculationMethod: m, madhab: md }))} onNext={next} />}
           {step === 6 && <StepTerminology value={data.terminology ?? 'arabic'} onChange={t => setData(d => ({ ...d, terminology: t }))} onNext={next} />}
           {step === 7 && <StepProfile name={data.name} gender={data.gender} onChange={(n, g) => setData(d => ({ ...d, name: n, gender: g }))} onNext={next} onSkip={next} />}
@@ -245,7 +246,80 @@ function StepTheme({ value, onChange, onNext }: { value: Theme; onChange: (t: Th
   );
 }
 
-function StepLocation({ onAllow, onManual }: { onAllow: () => void; onManual: () => void }) {
+interface NominatimResult {
+  lat: string; lon: string; display_name: string;
+  address?: { city?: string; town?: string; village?: string; state?: string; country?: string };
+}
+
+function StepLocation({ onAllow, onManual }: {
+  onAllow: () => void;
+  onManual: (lat: number, lng: number, city: string) => void;
+}) {
+  const [showSearch, setShowSearch] = useState(false);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<NominatimResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [allowing, setAllowing] = useState(false);
+
+  async function searchCity(q: string) {
+    if (q.length < 2) { setResults([]); return; }
+    setSearching(true);
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=6&addressdetails=1`,
+        { headers: { 'Accept-Language': 'en' } }
+      );
+      const data: NominatimResult[] = await res.json();
+      setResults(data);
+    } catch { setResults([]); }
+    setSearching(false);
+  }
+
+  function cityLabel(r: NominatimResult) {
+    const a = r.address ?? {};
+    const city = a.city ?? a.town ?? a.village ?? '';
+    const parts = [city, a.state, a.country].filter(Boolean);
+    return parts.join(', ') || r.display_name.split(',').slice(0, 3).join(', ');
+  }
+
+  if (showSearch) {
+    return (
+      <div className="space-y-4 pt-4">
+        <button onClick={() => setShowSearch(false)} className="text-[var(--text-tertiary)] text-sm">← Back</button>
+        <div>
+          <h2 className="font-display text-2xl text-[var(--text-primary)]">Search your city</h2>
+          <p className="text-[var(--text-secondary)] text-sm mt-1">Type a city or neighbourhood</p>
+        </div>
+        <div className="relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]" />
+          <input
+            autoFocus
+            value={query}
+            onChange={e => { setQuery(e.target.value); searchCity(e.target.value); }}
+            placeholder="e.g. Karachi, London, Cairo…"
+            className="w-full pl-9 pr-4 py-3 rounded-xl bg-[var(--bg-secondary)] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none border border-[var(--bg-tertiary)] focus:border-[var(--accent-primary)] transition-colors"
+          />
+        </div>
+        {searching && <p className="text-[var(--text-tertiary)] text-sm text-center">Searching…</p>}
+        <div className="space-y-1">
+          {results.map((r, i) => (
+            <button
+              key={i}
+              onClick={() => onManual(parseFloat(r.lat), parseFloat(r.lon), cityLabel(r))}
+              className="w-full text-left px-4 py-3 rounded-xl bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] text-sm transition-colors"
+            >
+              <MapPin size={12} className="inline mr-2 text-[var(--accent-primary)]" />
+              {cityLabel(r)}
+            </button>
+          ))}
+        </div>
+        {results.length === 0 && query.length >= 2 && !searching && (
+          <p className="text-[var(--text-tertiary)] text-sm text-center">No results — try a different spelling</p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 pt-8">
       <div className="text-center space-y-3">
@@ -260,16 +334,18 @@ function StepLocation({ onAllow, onManual }: { onAllow: () => void; onManual: ()
       </div>
       <div className="space-y-3">
         <button
-          onClick={onAllow}
-          className="w-full py-4 bg-[var(--accent-primary)] text-[#0D1421] font-semibold rounded-xl hover:bg-[var(--accent-secondary)] transition-colors flex items-center justify-center gap-2"
+          disabled={allowing}
+          onClick={async () => { setAllowing(true); await onAllow(); setAllowing(false); }}
+          className="w-full py-4 bg-[var(--accent-primary)] text-[#0D1421] font-semibold rounded-xl hover:bg-[var(--accent-secondary)] transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
         >
           <MapPin size={18} />
-          Allow location access
+          {allowing ? 'Getting location…' : 'Allow location access'}
         </button>
         <button
-          onClick={onManual}
-          className="w-full py-4 border border-[var(--bg-tertiary)] text-[var(--text-secondary)] rounded-xl hover:border-[var(--accent-secondary)] transition-colors"
+          onClick={() => setShowSearch(true)}
+          className="w-full py-4 border border-[var(--bg-tertiary)] text-[var(--text-secondary)] rounded-xl hover:border-[var(--accent-secondary)] transition-colors flex items-center justify-center gap-2"
         >
+          <Search size={16} />
           Enter city manually
         </button>
       </div>

@@ -63,6 +63,31 @@ export default function HomePage() {
     return () => clearInterval(interval);
   }, [tick]);
 
+  // Schedule browser notifications for today's remaining prayers
+  useEffect(() => {
+    if (!times || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    const PRAYER_LABELS_MAP: Record<string, string> = {
+      fajr: 'Fajr', dhuhr: 'Dhuhr', asr: 'Asr', maghrib: 'Maghrib', isha: "Isha'",
+    };
+    const now = Date.now();
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    (['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'] as const).forEach(prayer => {
+      const prayerTime = times[prayer];
+      if (!prayerTime) return;
+      const ms = prayerTime.getTime() - now;
+      if (ms > 0 && ms < 24 * 60 * 60 * 1000) {
+        timers.push(setTimeout(() => {
+          new Notification(`🕌 ${PRAYER_LABELS_MAP[prayer]} time`, {
+            body: 'It is time to pray. May Allah accept your worship.',
+            icon: '/icon-192.png',
+            tag: `prayer-${prayer}`,
+          });
+        }, ms));
+      }
+    });
+    return () => timers.forEach(clearTimeout);
+  }, [times]);
+
   const terminology = profile?.terminology ?? 'arabic';
   const totalQaza = Object.values(qazaLedger).reduce((sum, q) => sum + (q?.count ?? 0), 0);
   const today = new Date();

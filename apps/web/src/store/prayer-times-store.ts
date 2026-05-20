@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import type { PrayerTimesResult } from '@/lib/prayer-engine';
-import { calculatePrayerTimes, getCurrentPrayer, getNextPrayer, getTimeUntil, formatPrayerTime } from '@/lib/prayer-engine';
+import { calculatePrayerTimes, getCurrentPrayer, getNextPrayer, getTimeUntil } from '@/lib/prayer-engine';
 import type { CalculationMethodKey } from '@/lib/prayer-engine';
 
 interface PrayerTimesState {
@@ -15,11 +15,30 @@ interface PrayerTimesState {
   lat: number | null;
   lng: number | null;
   city: string | null;
+  method: CalculationMethodKey;
+  madhab: 'shafi' | 'hanafi';
 
   locate: () => Promise<void>;
   setManualLocation: (lat: number, lng: number, city?: string) => void;
+  setCalculationSettings: (method: CalculationMethodKey, madhab: 'shafi' | 'hanafi') => void;
   recalculate: () => void;
   tick: () => void;
+}
+
+function readSettingsFromStorage(): { method: CalculationMethodKey; madhab: 'shafi' | 'hanafi' } {
+  try {
+    if (typeof localStorage === 'undefined') return { method: 'MuslimWorldLeague', madhab: 'shafi' };
+    const stored = localStorage.getItem('hayya-falah-user');
+    if (!stored) return { method: 'MuslimWorldLeague', madhab: 'shafi' };
+    const parsed = JSON.parse(stored);
+    const profile = parsed?.state?.profile;
+    return {
+      method: (profile?.calculationMethod as CalculationMethodKey) ?? 'MuslimWorldLeague',
+      madhab: profile?.madhab === 'hanafi' ? 'hanafi' : 'shafi',
+    };
+  } catch {
+    return { method: 'MuslimWorldLeague', madhab: 'shafi' };
+  }
 }
 
 export const usePrayerTimesStore = create<PrayerTimesState>((set, get) => ({
@@ -32,27 +51,33 @@ export const usePrayerTimesStore = create<PrayerTimesState>((set, get) => ({
   lat: null,
   lng: null,
   city: null,
+  method: 'MuslimWorldLeague',
+  madhab: 'shafi',
 
-  locate: async () => {
+  locate: () => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      set({ locationError: 'Geolocation not supported' });
-      return;
+      set({ locationError: 'Geolocation not supported', isLocating: false });
+      return Promise.resolve();
     }
     set({ isLocating: true, locationError: null });
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        set({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          isLocating: false,
-        });
-        get().recalculate();
-      },
-      (err) => {
-        set({ isLocating: false, locationError: err.message });
-      },
-      { timeout: 10000 }
-    );
+    return new Promise<void>((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          set({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            isLocating: false,
+          });
+          get().recalculate();
+          resolve();
+        },
+        (err) => {
+          set({ isLocating: false, locationError: err.message });
+          resolve();
+        },
+        { timeout: 10000, enableHighAccuracy: false }
+      );
+    });
   },
 
   setManualLocation: (lat, lng, city) => {
@@ -60,23 +85,20 @@ export const usePrayerTimesStore = create<PrayerTimesState>((set, get) => ({
     get().recalculate();
   },
 
+  setCalculationSettings: (method, madhab) => {
+    set({ method, madhab });
+    get().recalculate();
+  },
+
   recalculate: () => {
-    const { lat, lng } = get();
+    const state = get();
+    const { lat, lng } = state;
     if (lat === null || lng === null) return;
 
-    const stored = typeof localStorage !== 'undefined'
-      ? localStorage.getItem('hayya-falah-user')
-      : null;
-    let method: CalculationMethodKey = 'MuslimWorldLeague';
-    let madhab: 'shafi' | 'hanafi' = 'shafi';
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        const profile = parsed?.state?.profile;
-        if (profile?.calculationMethod) method = profile.calculationMethod as CalculationMethodKey;
-        if (profile?.madhab === 'hanafi') madhab = 'hanafi';
-      } catch {}
-    }
+    // Use store values if explicitly set, otherwise fall back to localStorage
+    const stored = readSettingsFromStorage();
+    const method = state.method !== 'MuslimWorldLeague' ? state.method : stored.method;
+    const madhab = state.madhab !== 'shafi' ? state.madhab : stored.madhab;
 
     const times = calculatePrayerTimes({ lat, lng, method, madhab });
     const now = new Date();
@@ -84,7 +106,7 @@ export const usePrayerTimesStore = create<PrayerTimesState>((set, get) => ({
     const nextPrayer = getNextPrayer(times, now);
     const countdown = nextPrayer ? getTimeUntil(nextPrayer.time, now) : '';
 
-    set({ times, currentPrayer, nextPrayer, countdown });
+    set({ times, currentPrayer, nextPrayer, countdown, method, madhab });
   },
 
   tick: () => {

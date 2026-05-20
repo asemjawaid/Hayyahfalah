@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { AuthInitializer } from '@/components/auth/auth-initializer';
 
 export const metadata: Metadata = {
   title: 'Hayya Falah — حَيَّ عَلَى الْفَلَاح',
@@ -34,6 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
       <body suppressHydrationWarning className="bg-[var(--bg-primary)] text-[var(--text-primary)] min-h-screen antialiased">
+        <AuthInitializer />
         {children}
       </body>
     </html>

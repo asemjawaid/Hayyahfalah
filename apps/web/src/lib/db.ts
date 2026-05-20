@@ -276,6 +276,18 @@ export async function logPrayer(log: Omit<PrayerLog, 'id' | 'loggedAt'>): Promis
   } else {
     await adjustQaza(log.prayer, null, log.status);
   }
+
+  // Fire-and-forget cloud sync
+  try {
+    const { getSyncUser } = await import('./sync-user');
+    const userId = getSyncUser();
+    if (userId) {
+      const { pushPrayerLog, pushQazaLedger } = await import('./sync');
+      pushPrayerLog(entry, userId).catch(() => {});
+      const ledger = await db.qazaLedger.get(log.prayer);
+      if (ledger) pushQazaLedger(ledger, userId).catch(() => {});
+    }
+  } catch {}
 }
 
 export async function adjustQaza(

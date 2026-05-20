@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { BottomNav } from '@/components/ui/nav';
 import { useUserStore } from '@/store/user-store';
+import { usePrayerTimesStore } from '@/store/prayer-times-store';
+import { useAuthStore } from '@/store/auth-store';
 import { saveProfile } from '@/lib/db';
 import { CALCULATION_METHOD_LABELS, type CalculationMethodKey } from '@/lib/prayer-engine';
 import { cn } from '@/lib/utils';
@@ -51,12 +53,21 @@ const LANGUAGES = [
 export default function SettingsPage() {
   const [section, setSection] = useState<Section>(null);
   const { profile, updateProfile } = useUserStore();
+  const { setCalculationSettings } = usePrayerTimesStore();
 
   async function handleUpdateProfile(updates: Parameters<typeof updateProfile>[0]) {
     updateProfile(updates);
     await saveProfile(updates);
     if (updates.theme) {
       document.documentElement.setAttribute('data-theme', updates.theme);
+    }
+    // Immediately recalculate prayer times when calculation settings change
+    if (updates.calculationMethod !== undefined || updates.madhab !== undefined) {
+      const currentProfile = { ...profile, ...updates };
+      setCalculationSettings(
+        (currentProfile.calculationMethod as CalculationMethodKey) ?? 'MuslimWorldLeague',
+        currentProfile.madhab === 'hanafi' ? 'hanafi' : 'shafi'
+      );
     }
   }
 
@@ -216,49 +227,114 @@ function ProfileSection({ profile, onBack, onSave }: any) {
   const [name, setName] = useState(profile?.name ?? '');
   const [gender, setGender] = useState<Gender>(profile?.gender ?? 'not_specified');
   const [dob, setDob] = useState(profile?.dateOfBirth ?? '');
+  const { user, emailSent, isLoading, isSyncing, error, sendMagicLink, logout, resetEmailSent } = useAuthStore();
+  const [email, setEmail] = useState('');
 
   return (
     <div className="min-h-screen pb-24 bg-[var(--bg-primary)]">
-      <SettingsHeader title="Profile" onBack={onBack} />
-      <div className="max-w-lg mx-auto px-4 py-6 space-y-5">
-        <div>
-          <label className="text-[var(--text-secondary)] text-sm">Name (optional)</label>
-          <input
-            value={name}
-            onChange={e => setName(e.target.value)}
-            placeholder="Your name"
-            className="mt-1 w-full px-4 py-3 rounded-xl bg-[var(--bg-secondary)] border border-[var(--bg-tertiary)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] transition-colors"
-          />
-        </div>
-        <div>
-          <label className="text-[var(--text-secondary)] text-sm block mb-2">Gender (optional)</label>
-          <div className="flex gap-2">
-            {([['male', 'Male'], ['female', 'Female'], ['not_specified', 'Prefer not to say']] as [Gender, string][]).map(([g, l]) => (
-              <button key={g} onClick={() => setGender(g)} className={cn('flex-1 py-2.5 rounded-xl text-xs font-medium transition-all', gender === g ? 'bg-[var(--accent-primary)] text-[#0D1421]' : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)]')}>
-                {l}
-              </button>
-            ))}
+      <SettingsHeader title="Account & Profile" onBack={onBack} />
+      <div className="max-w-lg mx-auto px-4 py-6 space-y-6">
+
+        {/* ── Cloud sync / auth ── */}
+        <div className="bg-[var(--bg-secondary)] rounded-2xl p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-[var(--accent-primary)]" />
+            <span className="text-[var(--text-primary)] font-medium text-sm">Cloud Sync</span>
+            {isSyncing && <span className="text-[var(--text-tertiary)] text-xs">Syncing…</span>}
           </div>
-          {gender === 'female' && (
-            <p className="text-[var(--text-tertiary)] text-xs mt-2">Enables Women's Mode in settings for cycle tracking and prayer exemptions.</p>
+
+          {user ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[var(--text-secondary)] text-sm">{user.email}</div>
+                  <div className="text-[var(--accent-primary)] text-xs">✓ Signed in — data syncs automatically</div>
+                </div>
+              </div>
+              <button
+                onClick={async () => { await logout(); }}
+                className="w-full py-2.5 border border-[var(--bg-tertiary)] text-[var(--text-tertiary)] rounded-xl text-sm hover:border-red-400 hover:text-red-400 transition-colors"
+              >
+                Sign out
+              </button>
+            </div>
+          ) : emailSent ? (
+            <div className="space-y-3 text-center py-2">
+              <div className="text-3xl">📬</div>
+              <p className="text-[var(--text-primary)] font-medium">Check your email</p>
+              <p className="text-[var(--text-secondary)] text-sm">
+                We sent a sign-in link to <strong>{email}</strong>. Tap it on this device to sync your data.
+              </p>
+              <button onClick={resetEmailSent} className="text-[var(--accent-primary)] text-sm underline">
+                Use a different email
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-[var(--text-tertiary)] text-xs leading-relaxed">
+                Sign in with your email to back up your prayer history and access it from any device. No password needed — we send a magic link.
+              </p>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && email && sendMagicLink(email)}
+                placeholder="your@email.com"
+                className="w-full px-4 py-3 rounded-xl bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none border border-transparent focus:border-[var(--accent-primary)] transition-colors"
+              />
+              {error && <p className="text-red-400 text-xs">{error}</p>}
+              <button
+                disabled={!email || isLoading}
+                onClick={() => sendMagicLink(email)}
+                className="w-full py-3 bg-[var(--accent-primary)] text-[#0D1421] font-semibold rounded-xl disabled:opacity-50"
+              >
+                {isLoading ? 'Sending…' : 'Send magic link'}
+              </button>
+            </div>
           )}
         </div>
-        <div>
-          <label className="text-[var(--text-secondary)] text-sm">Date of birth (optional)</label>
-          <input
-            type="date"
-            value={dob}
-            onChange={e => setDob(e.target.value)}
-            className="mt-1 w-full px-4 py-3 rounded-xl bg-[var(--bg-secondary)] border border-[var(--bg-tertiary)] text-[var(--text-primary)] focus:outline-none"
-          />
-          <p className="text-[var(--text-tertiary)] text-xs mt-1">Used for Qaza balance estimation only. Never leaves your device.</p>
+
+        {/* ── Display name / gender ── */}
+        <div className="space-y-5">
+          <div>
+            <label className="text-[var(--text-secondary)] text-sm">Name (optional)</label>
+            <input
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Your name"
+              className="mt-1 w-full px-4 py-3 rounded-xl bg-[var(--bg-secondary)] border border-[var(--bg-tertiary)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] transition-colors"
+            />
+          </div>
+          <div>
+            <label className="text-[var(--text-secondary)] text-sm block mb-2">Gender (optional)</label>
+            <div className="flex gap-2">
+              {([['male', 'Male'], ['female', 'Female'], ['not_specified', 'Prefer not to say']] as [Gender, string][]).map(([g, l]) => (
+                <button key={g} onClick={() => setGender(g)} className={cn('flex-1 py-2.5 rounded-xl text-xs font-medium transition-all', gender === g ? 'bg-[var(--accent-primary)] text-[#0D1421]' : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)]')}>
+                  {l}
+                </button>
+              ))}
+            </div>
+            {gender === 'female' && (
+              <p className="text-[var(--text-tertiary)] text-xs mt-2">Enables Women's Mode for cycle tracking.</p>
+            )}
+          </div>
+          <div>
+            <label className="text-[var(--text-secondary)] text-sm">Date of birth (optional)</label>
+            <input
+              type="date"
+              value={dob}
+              onChange={e => setDob(e.target.value)}
+              className="mt-1 w-full px-4 py-3 rounded-xl bg-[var(--bg-secondary)] border border-[var(--bg-tertiary)] text-[var(--text-primary)] focus:outline-none"
+            />
+            <p className="text-[var(--text-tertiary)] text-xs mt-1">Used for Qaza estimation only.</p>
+          </div>
+          <button
+            onClick={() => { onSave({ name: name || undefined, gender, dateOfBirth: dob || undefined }); onBack(); }}
+            className="w-full py-3 bg-[var(--accent-primary)] text-[#0D1421] font-semibold rounded-xl"
+          >
+            Save profile
+          </button>
         </div>
-        <button
-          onClick={() => { onSave({ name: name || undefined, gender, dateOfBirth: dob || undefined }); onBack(); }}
-          className="w-full py-3 bg-[var(--accent-primary)] text-[#0D1421] font-semibold rounded-xl"
-        >
-          Save
-        </button>
       </div>
     </div>
   );
@@ -404,71 +480,86 @@ function CalculationSection({ profile, onBack, onSave }: any) {
 }
 
 function NotificationsSection({ onBack }: { onBack: () => void }) {
-  const [masterOn, setMasterOn] = useState(false);
+  const [permission, setPermission] = useState<NotificationPermission>(
+    typeof Notification !== 'undefined' ? Notification.permission : 'default'
+  );
+  const [masterOn, setMasterOn] = useState(permission === 'granted');
+  const [permError, setPermError] = useState('');
+
+  async function handleMasterToggle(val: boolean) {
+    if (val) {
+      if (typeof Notification === 'undefined') {
+        setPermError('Notifications are not supported in this browser.');
+        return;
+      }
+      const result = await Notification.requestPermission();
+      setPermission(result);
+      if (result === 'granted') {
+        setMasterOn(true);
+        setPermError('');
+        new Notification('Hayya Falah', {
+          body: 'Prayer reminders are now enabled. May Allah ﷻ keep you consistent. 🌙',
+          icon: '/icon-192.png',
+        });
+      } else {
+        setMasterOn(false);
+        setPermError(
+          result === 'denied'
+            ? 'Notifications blocked. Enable them in your browser/phone settings.'
+            : 'Permission not granted.'
+        );
+      }
+    } else {
+      setMasterOn(false);
+    }
+  }
+
   const PRAYERS = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
 
   return (
     <div className="min-h-screen pb-24 bg-[var(--bg-primary)]">
       <SettingsHeader title="Notifications" onBack={onBack} />
       <div className="max-w-lg mx-auto px-4 py-6 space-y-5">
+
+        {/* Main toggle */}
         <div className="bg-[var(--bg-secondary)] rounded-xl p-4">
           <div className="flex items-center justify-between">
             <div>
               <div className="text-[var(--text-primary)] font-medium">Prayer reminders</div>
-              <div className="text-[var(--text-tertiary)] text-xs mt-0.5">Notify me before and at prayer times</div>
+              <div className="text-[var(--text-tertiary)] text-xs mt-0.5">
+                {permission === 'granted' ? 'Permission granted ✓' : 'Requires browser permission'}
+              </div>
             </div>
-            <Toggle value={masterOn} onChange={setMasterOn} />
+            <Toggle value={masterOn} onChange={handleMasterToggle} />
           </div>
+          {permError && (
+            <p className="text-red-400 text-xs mt-2">{permError}</p>
+          )}
+        </div>
+
+        {/* How it works info */}
+        <div className="bg-[var(--bg-tertiary)] rounded-xl p-4 space-y-2">
+          <p className="text-[var(--text-secondary)] text-sm font-medium">How prayer notifications work</p>
+          <p className="text-[var(--text-tertiary)] text-xs leading-relaxed">
+            Notifications are scheduled each time you open the app. For reliable alerts throughout the day, install Hayya Falah to your home screen (Add to Home Screen in Safari/Chrome) so it runs as a proper app.
+          </p>
         </div>
 
         {masterOn && (
           <div className="space-y-2">
-            <p className="text-[var(--text-secondary)] text-sm font-medium">Per prayer settings</p>
+            <p className="text-[var(--text-secondary)] text-sm font-medium">Reminder timing</p>
             {PRAYERS.map(prayer => (
-              <div key={prayer} className="bg-[var(--bg-secondary)] rounded-xl p-4 space-y-3">
-                <div className="text-[var(--text-primary)] font-medium text-sm">{prayer}</div>
-                <div className="space-y-2">
-                  {[
-                    ['Pre-prayer reminder', '15 min before'],
-                    ['At adhan time', 'Exact prayer time'],
-                    ['Follow-up', '30 min after if not logged'],
-                  ].map(([label, desc]) => (
-                    <div key={label} className="flex items-center justify-between">
-                      <div>
-                        <div className="text-[var(--text-secondary)] text-xs">{label}</div>
-                        <div className="text-[var(--text-tertiary)] text-xs">{desc}</div>
-                      </div>
-                      <Toggle value={true} onChange={() => {}} />
-                    </div>
-                  ))}
-                </div>
+              <div key={prayer} className="bg-[var(--bg-secondary)] rounded-xl p-4 flex items-center justify-between">
+                <div className="text-[var(--text-primary)] text-sm font-medium">{prayer}</div>
+                <div className="text-[var(--text-tertiary)] text-xs">At adhan time</div>
               </div>
             ))}
           </div>
         )}
 
         <div className="bg-[var(--bg-secondary)] rounded-xl p-4 space-y-3">
-          <p className="text-[var(--text-primary)] font-medium text-sm">Hijri calendar reminders</p>
-          {[
-            ['Sunnah fast days', 'Mondays & Thursdays'],
-            ['White Days', '13th, 14th, 15th of Hijri month'],
-            ['Day of Arafah', '9 Dhul Hijjah'],
-            ['Ashura', '10 Muharram'],
-          ].map(([label, desc]) => (
-            <div key={label} className="flex items-center justify-between">
-              <div>
-                <div className="text-[var(--text-secondary)] text-xs">{label}</div>
-                <div className="text-[var(--text-tertiary)] text-xs">{desc}</div>
-              </div>
-              <Toggle value={true} onChange={() => {}} />
-            </div>
-          ))}
-        </div>
-
-        <div className="bg-[var(--bg-tertiary)] rounded-xl p-3">
-          <p className="text-[var(--text-tertiary)] text-xs">
-            Browser notifications require permission. On mobile, install the app to your home screen (Add to Home Screen) for reliable prayer notifications.
-          </p>
+          <p className="text-[var(--text-primary)] font-medium text-sm">Hijri reminders</p>
+          <p className="text-[var(--text-tertiary)] text-xs">Coming soon — Ashura, Arafah, White Days, Sunnah fasts.</p>
         </div>
       </div>
     </div>
