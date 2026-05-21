@@ -158,6 +158,36 @@ export interface SadaqaLog {
   loggedAt: string;
 }
 
+// ── Habits ────────────────────────────────────────────────────────────────────
+
+export type HabitType =
+  | 'quran' | 'quran_memorize' | 'adhkar' | 'dhikr'
+  | 'sadaqa' | 'sadaqa_jariyah' | 'study' | 'qiyam'
+  | 'sunnah_fast' | 'kindness' | 'water' | 'exercise'
+  | 'sleep' | 'custom';
+
+export interface HabitDef {
+  id: string;
+  type: HabitType;
+  label: string;
+  emoji: string;
+  targetValue: number;
+  targetUnit: string;
+  reminderTime?: string; // HH:MM 24-hour
+  active: boolean;
+  createdAt: string;
+  sortOrder?: number;
+}
+
+export interface HabitLog {
+  id: string;
+  habitId: string;
+  date: string;
+  value: number;
+  note?: string;
+  loggedAt: string;
+}
+
 export type MemberRelationship = 'child' | 'student' | 'spouse' | 'sibling' | 'parent' | 'other';
 export type LinkStatus = 'local' | 'pending' | 'linked';
 
@@ -212,6 +242,8 @@ export class HayyaFalahDB extends Dexie {
   memberProfiles!: Table<MemberProfile>;
   memberPrayerLog!: Table<MemberPrayerLog>;
   sadaqaLog!: Table<SadaqaLog>;
+  habitDefs!: Table<HabitDef>;
+  habitLogs!: Table<HabitLog>;
 
   constructor() {
     super('HayyaFalahDB');
@@ -267,6 +299,24 @@ export class HayyaFalahDB extends Dexie {
       memberProfiles: 'id, createdAt',
       memberPrayerLog: 'id, profileId, date, [profileId+date]',
       sadaqaLog: 'id, date, type, loggedAt',
+    });
+    this.version(5).stores({
+      userProfile: 'id',
+      prayerLog: 'id, date, prayer, status, loggedAt',
+      qazaLedger: 'prayer',
+      cycleLog: 'id, startDate',
+      fastingLog: 'id, date, type',
+      nightPrayerLog: 'id, date, type, loggedAt',
+      zakatAssets: 'id, category, addedAt',
+      zakatLiabilities: 'id, category',
+      zakatPayments: 'id, paidDate',
+      savedMasjids: 'masjidId',
+      settings: 'key',
+      memberProfiles: 'id, createdAt',
+      memberPrayerLog: 'id, profileId, date, [profileId+date]',
+      sadaqaLog: 'id, date, type, loggedAt',
+      habitDefs: 'id, type, createdAt',
+      habitLogs: 'id, habitId, date, [habitId+date], loggedAt',
     });
   }
 }
@@ -582,4 +632,117 @@ export async function addSadaqaLog(log: Omit<SadaqaLog, 'id' | 'loggedAt'>): Pro
 
 export async function deleteSadaqaLog(id: string): Promise<void> {
   await db.sadaqaLog.delete(id);
+}
+
+// ── Habits ────────────────────────────────────────────────────────────────────
+
+export async function getHabitDefs(): Promise<HabitDef[]> {
+  const all = await db.habitDefs.orderBy('createdAt').toArray();
+  return all.filter(d => d.active);
+}
+
+export async function addHabitDef(def: Omit<HabitDef, 'id' | 'createdAt'>): Promise<string> {
+  const id = crypto.randomUUID();
+  await db.habitDefs.put({ id, createdAt: new Date().toISOString(), ...def });
+  return id;
+}
+
+export async function updateHabitDef(id: string, updates: Partial<HabitDef>): Promise<void> {
+  const existing = await db.habitDefs.get(id);
+  if (existing) await db.habitDefs.put({ ...existing, ...updates });
+}
+
+export async function deleteHabitDef(id: string): Promise<void> {
+  await db.habitDefs.delete(id);
+  await db.habitLogs.where('habitId').equals(id).delete();
+}
+
+export async function getHabitLogsForDate(date: string): Promise<HabitLog[]> {
+  return db.habitLogs.where('date').equals(date).toArray();
+}
+
+/**
+ * Upserts a habit log entry for a given (habitId, date) pair.
+ * `value` replaces whatever was previously stored for that day.
+ */
+export async function logHabitValue(
+  habitId: string,
+  date: string,
+  value: number,
+  note?: string,
+): Promise<void> {
+  const existing = await db.habitLogs
+    .where('[habitId+date]').equals([habitId, date])
+    .first();
+  await db.habitLogs.put({
+    id: existing?.id ?? crypto.randomUUID(),
+    habitId,
+    date,
+    value,
+    note: note || undefined,
+    loggedAt: new Date().toISOString(),
+  });
+}
+
+export async function getHabitLogsForHabit(habitId: string): Promise<HabitLog[]> {
+  const logs = await db.habitLogs.where('habitId').equals(habitId).toArray();
+  return logs.sort((a, b) => b.date.localeCompare(a.date));
+}
+
+// ── Quran journey ─────────────────────────────────────────────────────────────
+
+export const QURAN_HABIT_ID = '__quran_journey__';
+
+export async function getQuranTodayPages(date: string): Promise<number> {
+  const log = await db.habitLogs
+    .where('[habitId+date]').equals([QURAN_HABIT_ID, date])
+    .first();
+  return log?.value ?? 0;
+}
+
+export async function getQuranTotalPages(): Promise<number> {
+  const logs = await db.habitLogs.where('habitId').equals(QURAN_HABIT_ID).toArray();
+  return logs.reduce((sum, l) => sum + l.value, 0);
+}
+
+export async function getQuranRecentLogs(days = 14): Promise<HabitLog[]> {
+  const logs = await db.habitLogs.where('habitId').equals(QURAN_HABIT_ID).toArray();
+  return logs.sort((a, b) => b.date.localeCompare(a.date)).slice(0, days);
+}
+
+// ── Fasting helpers ───────────────────────────────────────────────────────────
+
+/** Consecutive days with at least one completed fast, ending today or yesterday. */
+export async function getFastingStreak(): Promise<number> {
+  const allLogs = await db.fastingLog.orderBy('date').toArray();
+  const completedDates = new Set(
+    allLogs.filter(l => l.status === 'completed').map(l => l.date),
+  );
+  const today = new Date().toISOString().split('T')[0];
+  const yesterday = new Date(Date.now() - 86_400_000).toISOString().split('T')[0];
+  const startDate = completedDates.has(today)
+    ? today
+    : completedDates.has(yesterday)
+    ? yesterday
+    : null;
+  if (!startDate) return 0;
+  let streak = 0;
+  const d = new Date(startDate);
+  while (completedDates.has(d.toISOString().split('T')[0])) {
+    streak++;
+    d.setDate(d.getDate() - 1);
+  }
+  return streak;
+}
+
+/** All-time Ramadan excused fasts minus all-time makeup fasts logged. */
+export async function getAllTimeMakeupFastsOwed(): Promise<number> {
+  const allLogs = await db.fastingLog.toArray();
+  const excused = allLogs.filter(l => l.type === 'ramadan' && l.status === 'excused').length;
+  const madeUp = allLogs.filter(l => l.type === 'makeup').length;
+  return Math.max(0, excused - madeUp);
+}
+
+export async function getFastingLogForDate(date: string): Promise<FastingLog | undefined> {
+  return db.fastingLog.where('date').equals(date).first();
 }
