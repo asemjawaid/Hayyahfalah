@@ -72,6 +72,13 @@ export interface PrayerLog {
   note?: string;
   loggedAt: string;
   originalDate?: string;
+  /**
+   * Set to `true` once the prayer's time window has expired and the missed
+   * prayer has been counted as an active qaza debt in the ledger.
+   * While `false` (or absent), the user can still make up the prayer without
+   * it ever appearing as qaza debt.
+   */
+  qazaFinalized?: boolean;
 }
 
 export interface QazaLedger {
@@ -138,6 +145,19 @@ export interface ZakatPayment {
   loggedAt: string;
 }
 
+export type SadaqaType = 'sadaqa' | 'kaffarah' | 'fidya' | 'nafl' | 'infaq' | 'sadaqa_jariyah';
+
+export interface SadaqaLog {
+  id: string;
+  type: SadaqaType;
+  amount: number;
+  currency: string;
+  date: string;
+  recipient?: string;
+  note?: string;
+  loggedAt: string;
+}
+
 export type MemberRelationship = 'child' | 'student' | 'spouse' | 'sibling' | 'parent' | 'other';
 export type LinkStatus = 'local' | 'pending' | 'linked';
 
@@ -191,6 +211,7 @@ export class HayyaFalahDB extends Dexie {
   settings!: Table<AppSetting>;
   memberProfiles!: Table<MemberProfile>;
   memberPrayerLog!: Table<MemberPrayerLog>;
+  sadaqaLog!: Table<SadaqaLog>;
 
   constructor() {
     super('HayyaFalahDB');
@@ -230,6 +251,22 @@ export class HayyaFalahDB extends Dexie {
       settings: 'key',
       memberProfiles: 'id, createdAt',
       memberPrayerLog: 'id, profileId, date, [profileId+date]',
+    });
+    this.version(4).stores({
+      userProfile: 'id',
+      prayerLog: 'id, date, prayer, status, loggedAt',
+      qazaLedger: 'prayer',
+      cycleLog: 'id, startDate',
+      fastingLog: 'id, date, type',
+      nightPrayerLog: 'id, date, type, loggedAt',
+      zakatAssets: 'id, category, addedAt',
+      zakatLiabilities: 'id, category',
+      zakatPayments: 'id, paidDate',
+      savedMasjids: 'masjidId',
+      settings: 'key',
+      memberProfiles: 'id, createdAt',
+      memberPrayerLog: 'id, profileId, date, [profileId+date]',
+      sadaqaLog: 'id, date, type, loggedAt',
     });
   }
 }
@@ -279,7 +316,7 @@ export async function logPrayer(log: Omit<PrayerLog, 'id' | 'loggedAt'>): Promis
   await db.prayerLog.put(entry);
 
   if (existing) {
-    await adjustQaza(log.prayer, existing.status, log.status);
+    await adjustQaza(log.prayer, existing.status, log.status, existing.qazaFinalized);
   } else {
     await adjustQaza(log.prayer, null, log.status);
   }
@@ -300,7 +337,9 @@ export async function logPrayer(log: Omit<PrayerLog, 'id' | 'loggedAt'>): Promis
 export async function adjustQaza(
   prayer: PrayerName,
   oldStatus: PrayerStatus | null,
-  newStatus: PrayerStatus
+  newStatus: PrayerStatus,
+  /** Whether the old 'missed' entry had already been finalized (window expired). */
+  wasQazaFinalized?: boolean,
 ): Promise<void> {
   const existing = await db.qazaLedger.get(prayer);
   const current: QazaLedger = existing ?? {
@@ -313,10 +352,16 @@ export async function adjustQaza(
   let delta = 0;
   let madUpDelta = 0;
 
-  if (oldStatus === 'missed') delta--;
+  // Undo the old status.
+  // For 'missed': only remove the debt if the window had already expired and
+  // the prayer was actually counted in the ledger. If the window was still open,
+  // no debt was ever added, so nothing to undo.
+  if (oldStatus === 'missed' && wasQazaFinalized) delta--;
   if (oldStatus === 'qaza') { delta++; madUpDelta--; }
 
-  if (newStatus === 'missed') delta++;
+  // Apply the new status.
+  // IMPORTANT: 'missed' does NOT immediately create a qaza debt. The debt is
+  // only counted after the prayer's time window expires (see finalizeExpiredMissed).
   if (newStatus === 'qaza') { delta--; madUpDelta++; }
 
   await db.qazaLedger.put({
@@ -325,6 +370,49 @@ export async function adjustQaza(
     totalMadeUp: Math.max(0, current.totalMadeUp + madUpDelta),
     lastUpdated: new Date().toISOString(),
   });
+}
+
+/**
+ * Called when a prayer's time window has expired and the prayer was marked
+ * as 'missed'. Marks the log as finalized and adds +1 to the qaza ledger.
+ * Safe to call multiple times — idempotent (checks qazaFinalized flag first).
+ */
+export async function finalizeExpiredMissed(prayer: PrayerName, date: string): Promise<void> {
+  const log = await db.prayerLog
+    .where('date').equals(date)
+    .and(l => l.prayer === prayer)
+    .first();
+
+  // Already finalized, or prayer was made up / not missed — nothing to do.
+  if (!log || log.status !== 'missed' || log.qazaFinalized) return;
+
+  // Stamp the log entry so we don't double-count on future calls.
+  await db.prayerLog.put({ ...log, qazaFinalized: true });
+
+  // Add the debt to the ledger.
+  const existing = await db.qazaLedger.get(prayer);
+  const current: QazaLedger = existing ?? {
+    prayer,
+    count: 0,
+    totalMadeUp: 0,
+    lastUpdated: new Date().toISOString(),
+  };
+  await db.qazaLedger.put({
+    ...current,
+    count: current.count + 1,
+    lastUpdated: new Date().toISOString(),
+  });
+
+  // Fire-and-forget cloud sync
+  try {
+    const { getSyncUser } = await import('./sync-user');
+    const userId = getSyncUser();
+    if (userId) {
+      const { pushQazaLedger } = await import('./sync');
+      const ledger = await db.qazaLedger.get(prayer);
+      if (ledger) pushQazaLedger(ledger, userId).catch(() => {});
+    }
+  } catch {}
 }
 
 export async function getQazaLedger(): Promise<Record<PrayerName, QazaLedger>> {
@@ -480,4 +568,18 @@ export async function getSetting(key: string): Promise<string | undefined> {
 
 export async function setSetting(key: string, value: string): Promise<void> {
   await db.settings.put({ key, value });
+}
+
+// ── Sadaqa Log ────────────────────────────────────────────────────────────────
+
+export async function getSadaqaLogs(): Promise<SadaqaLog[]> {
+  return db.sadaqaLog.orderBy('date').reverse().toArray();
+}
+
+export async function addSadaqaLog(log: Omit<SadaqaLog, 'id' | 'loggedAt'>): Promise<void> {
+  await db.sadaqaLog.put({ id: crypto.randomUUID(), loggedAt: new Date().toISOString(), ...log });
+}
+
+export async function deleteSadaqaLog(id: string): Promise<void> {
+  await db.sadaqaLog.delete(id);
 }

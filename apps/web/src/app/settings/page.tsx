@@ -162,15 +162,15 @@ export default function SettingsPage() {
           </Link>
 
           <Link
-            href="/zakat"
+            href="/giving"
             className="w-full flex items-center gap-4 p-4 bg-[var(--bg-secondary)] rounded-xl hover:bg-[var(--bg-tertiary)] transition-colors"
           >
             <div className="w-10 h-10 rounded-xl bg-[var(--bg-tertiary)] flex items-center justify-center">
               <Heart size={20} className="text-[var(--accent-primary)]" />
             </div>
             <div className="flex-1 text-left">
-              <div className="text-[var(--text-primary)] font-medium">Zakat Calculator</div>
-              <div className="text-[var(--text-tertiary)] text-xs">Track assets, nisab & payments</div>
+              <div className="text-[var(--text-primary)] font-medium">Giving Hub</div>
+              <div className="text-[var(--text-tertiary)] text-xs">Zakat, sadaqa & fitrana</div>
             </div>
             <ChevronRight size={16} className="text-[var(--text-tertiary)]" />
           </Link>

@@ -2,14 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, CalendarDays, Compass, Settings, UtensilsCrossed } from 'lucide-react';
+import { Home, CalendarDays, Heart, Settings, UtensilsCrossed } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
   { href: '/home', label: 'Home', icon: Home },
   { href: '/fasting', label: 'Fasting', icon: UtensilsCrossed },
   { href: '/calendar', label: 'Calendar', icon: CalendarDays },
-  { href: '/qibla', label: 'Qibla', icon: Compass },
+  { href: '/giving', label: 'Giving', icon: Heart },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
