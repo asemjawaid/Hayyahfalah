@@ -284,14 +284,14 @@ export default function GivingPage() {
   if (view === 'zakat_assets') return (
     <SubScreen title="Assets" onBack={back}>
       <AssetsSection assets={assets} currency={currency} prices={prices}
-        onDelete={async (id) => { await deleteZakatAsset(id); load(); }}
+        onDelete={async (id) => { await deleteZakatAsset(id); await load(); }}
         onAdd={() => setView('add_asset')} />
     </SubScreen>
   );
   if (view === 'zakat_liabilities') return (
     <SubScreen title="Liabilities" onBack={back}>
       <LiabilitiesSection liabilities={liabilities} currency={currency}
-        onDelete={async (id) => { await deleteZakatLiability(id); load(); }}
+        onDelete={async (id) => { await deleteZakatLiability(id); await load(); }}
         onAdd={() => setView('add_liability')} />
     </SubScreen>
   );
@@ -303,25 +303,25 @@ export default function GivingPage() {
   if (view === 'add_asset') return (
     <SubScreen title="Add Asset" onBack={() => setView('zakat_assets')}>
       <AddAssetForm currency={currency} prices={prices}
-        onSave={async (a) => { await addZakatAsset(a); setView('zakat_assets'); load(); }} />
+        onSave={async (a) => { await addZakatAsset(a); await load(); setView('zakat_assets'); }} />
     </SubScreen>
   );
   if (view === 'add_liability') return (
     <SubScreen title="Add Liability" onBack={() => setView('zakat_liabilities')}>
       <AddLiabilityForm currency={currency}
-        onSave={async (l) => { await addZakatLiability(l); setView('zakat_liabilities'); load(); }} />
+        onSave={async (l) => { await addZakatLiability(l); await load(); setView('zakat_liabilities'); }} />
     </SubScreen>
   );
   if (view === 'add_payment') return (
     <SubScreen title="Log Zakat Payment" onBack={() => setView('zakat_payments')}>
       <AddPaymentForm zakatAmount={zakatAmount} currency={currency}
-        onSave={async (p) => { await logZakatPayment(p); setView('zakat_payments'); load(); }} />
+        onSave={async (p) => { await logZakatPayment(p); await load(); setView('zakat_payments'); }} />
     </SubScreen>
   );
   if (view === 'add_sadaqa') return (
     <SubScreen title="Log Sadaqa" onBack={back}>
       <AddSadaqaForm currency={currency}
-        onSave={async (s) => { await addSadaqaLog(s); back(); load(); }} />
+        onSave={async (s) => { await addSadaqaLog(s); await load(); back(); }} />
     </SubScreen>
   );
 
@@ -454,7 +454,7 @@ export default function GivingPage() {
             <motion.div key="sadaqa" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} className="space-y-4">
               <SadaqaTab logs={sadaqaLogs} sadaqaThisYear={sadaqaThisYear} currency={currency}
                 onAdd={() => setView('add_sadaqa')}
-                onDelete={async (id) => { await deleteSadaqaLog(id); load(); }} />
+                onDelete={async (id) => { await deleteSadaqaLog(id); await load(); }} />
             </motion.div>
           )}
           {tab === 'fitrana' && (
@@ -975,15 +975,24 @@ function PaymentsSection({ payments, currency, onAdd }: { payments: ZakatPayment
 
 function AddAssetForm({ currency, prices, onSave }: {
   currency: string; prices: MetalPrices;
-  onSave: (a: Omit<ZakatAsset, 'id' | 'addedAt'>) => void;
+  onSave: (a: Omit<ZakatAsset, 'id' | 'addedAt'>) => Promise<void>;
 }) {
   const [category, setCategory] = useState<ZakatAssetCategory>('cash');
   const [label, setLabel] = useState('');
   const [value, setValue] = useState('');
   const [weightGrams, setWeightGrams] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const isGoldSilver = category === 'gold' || category === 'silver';
   const pricePerGram = category === 'gold' ? prices.goldPerGram : prices.silverPerGram;
   const approxValue = isGoldSilver ? (parseFloat(weightGrams) || 0) * pricePerGram : 0;
+
+  async function handleSave() {
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      await onSave({ category, label: label || undefined, value: parseFloat(value), currency, weightGrams: weightGrams ? parseFloat(weightGrams) : undefined });
+    } finally { setIsSaving(false); }
+  }
 
   return (
     <div className="space-y-5">
@@ -1006,7 +1015,8 @@ function AddAssetForm({ currency, prices, onSave }: {
       {isGoldSilver && (
         <div>
           <label className="text-[var(--text-secondary)] text-sm mb-1 block">Weight (grams)</label>
-          <input type="number" value={weightGrams} onChange={e => setWeightGrams(e.target.value)} placeholder="0"
+          <input type="text" inputMode="decimal" pattern="[0-9.]*"
+            value={weightGrams} onChange={e => setWeightGrams(e.target.value)} placeholder="0"
             className="w-full px-4 py-3 rounded-xl bg-[var(--bg-secondary)] text-[var(--text-primary)] focus:outline-none" />
           <div className="flex items-center justify-between mt-1">
             <p className="text-[var(--text-tertiary)] text-xs">
@@ -1027,14 +1037,15 @@ function AddAssetForm({ currency, prices, onSave }: {
       )}
       <div>
         <label className="text-[var(--text-secondary)] text-sm mb-1 block">Value ({currency})</label>
-        <input type="number" value={value} onChange={e => setValue(e.target.value)} placeholder="0.00"
+        <input type="text" inputMode="decimal" pattern="[0-9.]*"
+          value={value} onChange={e => setValue(e.target.value)} placeholder="0.00"
           className="w-full px-4 py-3 rounded-xl bg-[var(--bg-secondary)] text-[var(--text-primary)] focus:outline-none" />
       </div>
       <button
-        disabled={!value || parseFloat(value) <= 0}
-        onClick={() => onSave({ category, label: label || undefined, value: parseFloat(value), currency, weightGrams: weightGrams ? parseFloat(weightGrams) : undefined })}
-        className="w-full py-3 bg-[var(--accent-primary)] text-[#0D1421] font-semibold rounded-xl disabled:opacity-50">
-        Add Asset
+        disabled={!value || parseFloat(value) <= 0 || isSaving}
+        onClick={handleSave}
+        className="w-full py-3 bg-[var(--accent-primary)] text-[#0D1421] font-semibold rounded-xl disabled:opacity-50 transition-opacity">
+        {isSaving ? 'Saving…' : 'Add Asset'}
       </button>
     </div>
   );
@@ -1042,10 +1053,18 @@ function AddAssetForm({ currency, prices, onSave }: {
 
 // ── Add Liability Form ────────────────────────────────────────────────────────
 
-function AddLiabilityForm({ currency, onSave }: { currency: string; onSave: (l: Omit<ZakatLiability, 'id'>) => void }) {
+function AddLiabilityForm({ currency, onSave }: { currency: string; onSave: (l: Omit<ZakatLiability, 'id'>) => Promise<void> }) {
   const [category, setCategory] = useState<ZakatLiabilityCategory>('loan');
   const [label, setLabel] = useState('');
   const [value, setValue] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  async function handleSave() {
+    if (isSaving) return;
+    setIsSaving(true);
+    try { await onSave({ category, label: label || undefined, value: parseFloat(value), currency }); }
+    finally { setIsSaving(false); }
+  }
 
   return (
     <div className="space-y-5">
@@ -1067,14 +1086,15 @@ function AddLiabilityForm({ currency, onSave }: { currency: string; onSave: (l: 
       </div>
       <div>
         <label className="text-[var(--text-secondary)] text-sm mb-1 block">Amount ({currency})</label>
-        <input type="number" value={value} onChange={e => setValue(e.target.value)} placeholder="0.00"
+        <input type="text" inputMode="decimal" pattern="[0-9.]*"
+          value={value} onChange={e => setValue(e.target.value)} placeholder="0.00"
           className="w-full px-4 py-3 rounded-xl bg-[var(--bg-secondary)] text-[var(--text-primary)] focus:outline-none" />
       </div>
       <button
-        disabled={!value || parseFloat(value) <= 0}
-        onClick={() => onSave({ category, label: label || undefined, value: parseFloat(value), currency })}
-        className="w-full py-3 bg-[var(--accent-primary)] text-[#0D1421] font-semibold rounded-xl disabled:opacity-50">
-        Add Liability
+        disabled={!value || parseFloat(value) <= 0 || isSaving}
+        onClick={handleSave}
+        className="w-full py-3 bg-[var(--accent-primary)] text-[#0D1421] font-semibold rounded-xl disabled:opacity-50 transition-opacity">
+        {isSaving ? 'Saving…' : 'Add Liability'}
       </button>
     </div>
   );
@@ -1083,13 +1103,21 @@ function AddLiabilityForm({ currency, onSave }: { currency: string; onSave: (l: 
 // ── Add Payment Form ──────────────────────────────────────────────────────────
 
 function AddPaymentForm({ onSave, zakatAmount, currency }: {
-  onSave: (p: Omit<ZakatPayment, 'id' | 'loggedAt'>) => void; zakatAmount: number; currency: string;
+  onSave: (p: Omit<ZakatPayment, 'id' | 'loggedAt'>) => Promise<void>; zakatAmount: number; currency: string;
 }) {
   const today = new Date().toISOString().split('T')[0];
   const [paidDate, setPaidDate] = useState(today);
   const [amount, setAmount] = useState(zakatAmount > 0 ? zakatAmount.toFixed(2) : '');
   const [recipient, setRecipient] = useState<ZakatRecipientCategory>('poor');
   const [note, setNote] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  async function handleSave() {
+    if (isSaving) return;
+    setIsSaving(true);
+    try { await onSave({ paidDate, amount: parseFloat(amount), currency, recipientCategory: recipient, recipientNote: note || undefined }); }
+    finally { setIsSaving(false); }
+  }
 
   return (
     <div className="space-y-5">
@@ -1100,7 +1128,8 @@ function AddPaymentForm({ onSave, zakatAmount, currency }: {
       </div>
       <div>
         <label className="text-[var(--text-secondary)] text-sm mb-1 block">Amount ({currency})</label>
-        <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00"
+        <input type="text" inputMode="decimal" pattern="[0-9.]*"
+          value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00"
           className="w-full px-4 py-3 rounded-xl bg-[var(--bg-secondary)] text-[var(--text-primary)] focus:outline-none" />
       </div>
       <div>
@@ -1120,10 +1149,10 @@ function AddPaymentForm({ onSave, zakatAmount, currency }: {
           className="w-full px-4 py-3 rounded-xl bg-[var(--bg-secondary)] text-[var(--text-primary)] focus:outline-none" />
       </div>
       <button
-        disabled={!amount || parseFloat(amount) <= 0}
-        onClick={() => onSave({ paidDate, amount: parseFloat(amount), currency, recipientCategory: recipient, recipientNote: note || undefined })}
-        className="w-full py-3 bg-[var(--accent-primary)] text-[#0D1421] font-semibold rounded-xl disabled:opacity-50">
-        Record Payment
+        disabled={!amount || parseFloat(amount) <= 0 || isSaving}
+        onClick={handleSave}
+        className="w-full py-3 bg-[var(--accent-primary)] text-[#0D1421] font-semibold rounded-xl disabled:opacity-50 transition-opacity">
+        {isSaving ? 'Saving…' : 'Record Payment'}
       </button>
     </div>
   );
@@ -1132,7 +1161,7 @@ function AddPaymentForm({ onSave, zakatAmount, currency }: {
 // ── Add Sadaqa Form ───────────────────────────────────────────────────────────
 
 function AddSadaqaForm({ currency, onSave }: {
-  currency: string; onSave: (s: Omit<SadaqaLog, 'id' | 'loggedAt'>) => void;
+  currency: string; onSave: (s: Omit<SadaqaLog, 'id' | 'loggedAt'>) => Promise<void>;
 }) {
   const today = new Date().toISOString().split('T')[0];
   const [type, setType] = useState<SadaqaType>('sadaqa');
@@ -1140,6 +1169,17 @@ function AddSadaqaForm({ currency, onSave }: {
   const [date, setDate] = useState(today);
   const [recipient, setRecipient] = useState('');
   const [note, setNote] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  async function handleSave() {
+    if (isSaving || !amount || parseFloat(amount) <= 0) return;
+    setIsSaving(true);
+    try {
+      await onSave({ type, amount: parseFloat(amount), currency, date, recipient: recipient || undefined, note: note || undefined });
+      setSaved(true); // navigation happens inside onSave; this is just a safety flag
+    } finally { setIsSaving(false); }
+  }
 
   return (
     <div className="space-y-5">
@@ -1157,8 +1197,11 @@ function AddSadaqaForm({ currency, onSave }: {
       </div>
       <div>
         <label className="text-[var(--text-secondary)] text-sm mb-1 block">Amount ({currency})</label>
-        <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00"
-          className="w-full px-4 py-3 rounded-xl bg-[var(--bg-secondary)] text-[var(--text-primary)] focus:outline-none" />
+        <input
+          type="text" inputMode="decimal" pattern="[0-9.]*"
+          value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00"
+          autoFocus
+          className="w-full px-4 py-3 rounded-xl bg-[var(--bg-secondary)] text-[var(--text-primary)] text-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/40" />
       </div>
       <div>
         <label className="text-[var(--text-secondary)] text-sm mb-1 block">Date</label>
@@ -1176,10 +1219,10 @@ function AddSadaqaForm({ currency, onSave }: {
           className="w-full px-4 py-3 rounded-xl bg-[var(--bg-secondary)] text-[var(--text-primary)] focus:outline-none" />
       </div>
       <button
-        disabled={!amount || parseFloat(amount) <= 0}
-        onClick={() => onSave({ type, amount: parseFloat(amount), currency, date, recipient: recipient || undefined, note: note || undefined })}
-        className="w-full py-3 bg-[var(--accent-primary)] text-[#0D1421] font-semibold rounded-xl disabled:opacity-50">
-        Log Sadaqa
+        disabled={!amount || parseFloat(amount) <= 0 || isSaving || saved}
+        onClick={handleSave}
+        className="w-full py-3.5 bg-[var(--accent-primary)] text-[#0D1421] font-semibold rounded-xl disabled:opacity-50 transition-all active:scale-[0.98]">
+        {isSaving ? 'Saving…' : saved ? '✓ Saved' : `Log Sadaqa · ${amount ? fmtMoney(parseFloat(amount) || 0, currency, 2) : currency}`}
       </button>
     </div>
   );

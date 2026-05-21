@@ -110,7 +110,7 @@ export function NightPrayerSection() {
                 completed: true,
                 note,
               });
-              load();
+              await load();
               setModal(null);
             }}
           />

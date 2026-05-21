@@ -68,7 +68,7 @@ function getWindowEndTime(prayer: PrayerName, times: PrayerTimesResult): Date | 
 
 export default function HomePage() {
   const router = useRouter();
-  const { profile, updateProfile } = useUserStore();
+  const { profile } = useUserStore();
   const { todayLogs, qazaLedger, loadForDate, loadQaza, setSelectedDate } = usePrayerStore();
   const { times, nextPrayer, countdown, locate, recalculate, tick, lat, lng, isLocating } = usePrayerTimesStore();
   const { profiles, memberLogs, loadProfiles, loadLogsForDate } = useFamilyStore();
@@ -425,11 +425,11 @@ export default function HomePage() {
           )}
         </motion.div>
 
-        {/* ── Stats Row ── */}
-        {isToday && (
+        {/* ── Stats Row ── (streak + rate only for today; qaza always) */}
+        {isToday ? (
           <div className="grid grid-cols-3 gap-3">
             {[
-              { value: `${streak}d`, label: 'Fajr streak' },
+              { value: `${streak}d`, label: 'Streak' },
               { value: `${thirtyDayRate}%`, label: '30-day rate' },
               { value: `${totalQaza}`, label: 'Qaza left' },
             ].map(({ value, label }) => (
@@ -439,9 +439,17 @@ export default function HomePage() {
               </div>
             ))}
           </div>
+        ) : (
+          /* On past dates show just qaza balance so user knows their total */
+          <div className="flex justify-center">
+            <div className="bg-[var(--bg-secondary)] rounded-2xl px-6 py-3 border border-[var(--bg-tertiary)] text-center">
+              <p className="font-display text-2xl tabular-nums text-[var(--text-primary)]">{totalQaza}</p>
+              <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--text-tertiary)] font-medium mt-1">Qaza left (total)</p>
+            </div>
+          </div>
         )}
 
-        {/* ── Habit coach nudge ── */}
+        {/* ── Habit coach nudge ── today only */}
         {isToday && (
           <div className="px-4 py-3 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--bg-tertiary)]">
             <p className="text-[var(--text-tertiary)] text-xs leading-relaxed italic">{COACH_NUDGES[nudgeIdx]}</p>
@@ -511,16 +519,21 @@ export default function HomePage() {
               <div className="space-y-2">
                 {profiles.slice(0, 3).map(p => {
                   const logs = memberLogs[p.id] ?? {};
-                  const done = PRAYERS.filter(pr => logs[pr]).length;
+                  const done = PRAYERS.filter(pr => {
+                    const l = logs[pr];
+                    return l && PRAYED_STATUSES.includes(l.status);
+                  }).length;
                   return (
                     <Link key={p.id} href={`/family/${p.id}`} className="flex items-center gap-2 group">
                       <span className="text-base leading-none">{p.emoji}</span>
                       <div className="flex-1 min-w-0">
                         <div className="text-[var(--text-secondary)] text-xs truncate">{p.name}</div>
                         <div className="flex gap-0.5 mt-1">
-                          {PRAYERS.map(pr => (
-                            <div key={pr} className={cn('h-1 rounded-full flex-1', logs[pr] ? 'bg-[var(--accent-primary)]' : 'bg-[var(--bg-tertiary)]')} />
-                          ))}
+                          {PRAYERS.map(pr => {
+                            const l = logs[pr];
+                            const prayed = l && PRAYED_STATUSES.includes(l.status);
+                            return <div key={pr} className={cn('h-1 rounded-full flex-1', prayed ? 'bg-[var(--accent-primary)]' : 'bg-[var(--bg-tertiary)]')} />;
+                          })}
                         </div>
                       </div>
                       <span className="text-[var(--text-tertiary)] text-[10px] shrink-0">{done}/5</span>

@@ -14,13 +14,13 @@ import type { PrayerTimesResult } from '@/lib/prayer-engine';
 const PRAYERS: PrayerName[] = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
 
 const STATUS_CONFIGS: Record<PrayerStatus, { label: string; dotClass: string; icon?: React.ReactNode }> = {
-  on_time: { label: 'On time', dotClass: 'prayer-dot-on_time', icon: <Check size={14} /> },
-  late: { label: 'Late', dotClass: 'prayer-dot-late', icon: <Clock size={14} /> },
-  jamaah: { label: 'In jamaah', dotClass: 'prayer-dot-jamaah', icon: <Building2 size={14} /> },
-  jamaah_home: { label: 'Jamaah (home)', dotClass: 'prayer-dot-jamaah', icon: <Building2 size={14} /> },
-  qaza: { label: 'Qaza', dotClass: 'prayer-dot-qaza', icon: <Moon size={14} /> },
-  missed: { label: 'Missed', dotClass: 'prayer-dot-missed' },
-  excused: { label: 'Excused', dotClass: 'prayer-dot-excused' },
+  on_time:     { label: 'On time',        dotClass: 'prayer-dot-on_time',  icon: <Check    size={14} /> },
+  late:        { label: 'Late',           dotClass: 'prayer-dot-late',     icon: <Clock    size={14} /> },
+  jamaah:      { label: 'In jamaah',      dotClass: 'prayer-dot-jamaah',   icon: <Building2 size={14} /> },
+  jamaah_home: { label: 'Jamaah (home)',  dotClass: 'prayer-dot-jamaah',   icon: <Building2 size={14} /> },
+  qaza:        { label: 'Qaza (made up)', dotClass: 'prayer-dot-qaza',     icon: <Moon     size={14} /> },
+  missed:      { label: 'Missed',         dotClass: 'prayer-dot-missed' },
+  excused:     { label: 'Excused',        dotClass: 'prayer-dot-excused' },
 };
 
 interface PrayerRowProps {
@@ -74,7 +74,11 @@ export function PrayerRow({ prayer, times, log, terminology, isCurrent, isUpcomi
         {/* Status indicator */}
         <div className="flex items-center gap-2">
           {status && (
-            <span className="text-xs text-[var(--text-tertiary)]">{config?.label}</span>
+            <span className="text-xs text-[var(--text-tertiary)]">
+              {status === 'missed'
+                ? log?.qazaFinalized ? 'Missed · qaza' : 'Missed · pending'
+                : config?.label}
+            </span>
           )}
           <button
             onClick={handleQuickLog}
