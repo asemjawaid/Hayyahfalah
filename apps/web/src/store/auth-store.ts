@@ -1,28 +1,28 @@
 'use client';
 
 import { create } from 'zustand';
-import { supabase, signInWithEmail, signOut, type SupabaseUser } from '@/lib/supabase';
+import { supabase, signInWithPassword, signUpWithPassword, signInWithGoogle, signOut, type SupabaseUser } from '@/lib/supabase';
 import { pullFromCloud, pushAllToCloud } from '@/lib/sync';
 import { setSyncUser } from '@/lib/sync-user';
+import { useUserStore } from '@/store/user-store';
 
 interface AuthState {
   user: SupabaseUser | null;
   isLoading: boolean;
   isSyncing: boolean;
-  emailSent: boolean;
   error: string | null;
 
   initialize: () => Promise<void>;
-  sendMagicLink: (email: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
-  resetEmailSent: () => void;
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
+export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isLoading: true,
   isSyncing: false,
-  emailSent: false,
   error: null,
 
   initialize: async () => {
@@ -33,11 +33,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         const user: SupabaseUser = { id: data.user.id, email: data.user.email ?? '' };
         setSyncUser(user.id);
         set({ user });
-        // Pull latest data from cloud
+        // Pull latest cloud data and apply profile to user-store
         set({ isSyncing: true });
-        await pullFromCloud(user.id);
+        const cloudProfile = await pullFromCloud(user.id);
+        if (cloudProfile) useUserStore.getState().setProfile({ ...cloudProfile, id: 'local' });
         set({ isSyncing: false });
-        // Ensure profile row exists in Supabase
         upsertProfile(data.user.id, data.user.email ?? '');
       }
     } catch {
@@ -45,20 +45,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
     set({ isLoading: false });
 
-    // Listen for auth state changes (magic link callback)
+    // Listen for sign-in/out events (covers OAuth callback, password sign-in)
     supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
         const user: SupabaseUser = { id: session.user.id, email: session.user.email ?? '' };
         setSyncUser(user.id);
-        set({ user, emailSent: false });
-        // First sign-in: push local data up, then pull cloud data down
+        set({ user });
+        // Push local data first, then pull cloud (so new device gets cloud profile)
         set({ isSyncing: true });
         await pushAllToCloud(user.id);
-        await pullFromCloud(user.id);
+        const cloudProfile = await pullFromCloud(user.id);
+        if (cloudProfile) useUserStore.getState().setProfile({ ...cloudProfile, id: 'local' });
         set({ isSyncing: false });
-        // Ensure profile row exists
         upsertProfile(session.user.id, session.user.email ?? '');
-        // Clear skip flag now that user has signed in
         if (typeof window !== 'undefined') localStorage.removeItem('auth_skipped');
       } else if (event === 'SIGNED_OUT') {
         setSyncUser(null);
@@ -67,24 +66,34 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
   },
 
-  sendMagicLink: async (email: string) => {
+  signIn: async (email, password) => {
     set({ isLoading: true, error: null });
-    const { error } = await signInWithEmail(email);
-    if (error) {
-      set({ error, isLoading: false });
-    } else {
-      set({ emailSent: true, isLoading: false });
-    }
+    const { error } = await signInWithPassword(email, password);
+    // Session set — onAuthStateChange handles the rest
+    if (error) set({ error, isLoading: false });
+    else set({ isLoading: false });
+  },
+
+  signUp: async (email, password) => {
+    set({ isLoading: true, error: null });
+    const { error } = await signUpWithPassword(email, password);
+    // Auto-confirmed — session is set immediately via onAuthStateChange
+    if (error) set({ error, isLoading: false });
+    else set({ isLoading: false });
+  },
+
+  signInWithGoogle: async () => {
+    set({ error: null });
+    const { error } = await signInWithGoogle();
+    if (error) set({ error });
+    // OAuth redirect — page will reload; onAuthStateChange handles on return
   },
 
   logout: async () => {
     await signOut();
-    // Remove skip flag so next open prompts sign-in again
     if (typeof window !== 'undefined') localStorage.removeItem('auth_skipped');
-    set({ user: null, emailSent: false });
+    set({ user: null });
   },
-
-  resetEmailSent: () => set({ emailSent: false }),
 }));
 
 /** Fire-and-forget: ensure a row in `profiles` table exists for this user */

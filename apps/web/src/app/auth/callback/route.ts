@@ -13,6 +13,7 @@ export async function GET(request: Request) {
     await supabase.auth.exchangeCodeForSession(code);
   }
 
-  // After exchanging the code, redirect to home
-  return NextResponse.redirect(`${origin}/home`);
+  // Redirect to root — root page checks auth state and sends to the right place
+  // (home if onboarding done, onboarding if not)
+  return NextResponse.redirect(`${origin}/`);
 }

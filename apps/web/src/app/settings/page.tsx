@@ -227,8 +227,10 @@ function ProfileSection({ profile, onBack, onSave }: any) {
   const [name, setName] = useState(profile?.name ?? '');
   const [gender, setGender] = useState<Gender>(profile?.gender ?? 'not_specified');
   const [dob, setDob] = useState(profile?.dateOfBirth ?? '');
-  const { user, emailSent, isLoading, isSyncing, error, sendMagicLink, logout, resetEmailSent } = useAuthStore();
+  const { user, isLoading, isSyncing, error, signIn, signUp, logout } = useAuthStore();
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
 
   return (
     <div className="min-h-screen pb-24 bg-[var(--bg-primary)]">
@@ -281,37 +283,46 @@ function ProfileSection({ profile, onBack, onSave }: any) {
                 Sign out
               </button>
             </div>
-          ) : emailSent ? (
-            <div className="space-y-3 text-center py-2">
-              <div className="text-3xl">📬</div>
-              <p className="text-[var(--text-primary)] font-medium">Check your email</p>
-              <p className="text-[var(--text-secondary)] text-sm">
-                We sent a sign-in link to <strong>{email}</strong>. Tap it on this device to sync your data.
-              </p>
-              <button onClick={resetEmailSent} className="text-[var(--accent-primary)] text-sm underline">
-                Use a different email
-              </button>
-            </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-[var(--text-tertiary)] text-xs leading-relaxed">
-                Sign in with your email to back up your prayer history and access it from any device. No password needed — we send a magic link.
-              </p>
+              {/* Mode tabs */}
+              <div className="flex bg-[var(--bg-tertiary)] rounded-xl p-1 gap-1">
+                {(['signin', 'signup'] as const).map(m => (
+                  <button
+                    key={m}
+                    onClick={() => setAuthMode(m)}
+                    className={cn(
+                      'flex-1 py-1.5 text-xs font-medium rounded-lg transition-all',
+                      authMode === m
+                        ? 'bg-[var(--accent-primary)] text-[#0D1421]'
+                        : 'text-[var(--text-secondary)]'
+                    )}
+                  >
+                    {m === 'signin' ? 'Sign In' : 'Create Account'}
+                  </button>
+                ))}
+              </div>
               <input
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && email && sendMagicLink(email)}
                 placeholder="your@email.com"
-                className="w-full px-4 py-3 rounded-xl bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none border border-transparent focus:border-[var(--accent-primary)] transition-colors"
+                className="w-full px-4 py-2.5 rounded-xl bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none text-sm"
+              />
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder={authMode === 'signin' ? 'Password' : 'Create password (min. 6 chars)'}
+                className="w-full px-4 py-2.5 rounded-xl bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none text-sm"
               />
               {error && <p className="text-red-400 text-xs">{error}</p>}
               <button
-                disabled={!email || isLoading}
-                onClick={() => sendMagicLink(email)}
-                className="w-full py-3 bg-[var(--accent-primary)] text-[#0D1421] font-semibold rounded-xl disabled:opacity-50"
+                disabled={!email || !password || isLoading}
+                onClick={() => authMode === 'signin' ? signIn(email, password) : signUp(email, password)}
+                className="w-full py-2.5 bg-[var(--accent-primary)] text-[#0D1421] font-semibold rounded-xl disabled:opacity-50 text-sm"
               >
-                {isLoading ? 'Sending…' : 'Send magic link'}
+                {isLoading ? 'Please wait…' : authMode === 'signin' ? 'Sign In' : 'Create Account'}
               </button>
             </div>
           )}

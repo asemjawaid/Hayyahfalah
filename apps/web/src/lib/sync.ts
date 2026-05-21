@@ -8,7 +8,30 @@
 
 import { supabase } from './supabase';
 import { db } from './db';
-import type { PrayerLog, QazaLedger, FastingLog, NightPrayerLog } from './db';
+import type { PrayerLog, QazaLedger, FastingLog, NightPrayerLog, UserProfile } from './db';
+
+// ── User profile sync ────────────────────────────────────────────────────────
+
+/** Push user profile to Supabase user_profiles table */
+export async function pushUserProfile(profile: Partial<UserProfile>, userId: string): Promise<void> {
+  // Only push meaningful profiles (onboarding completed or has location/name)
+  if (!profile || (!profile.onboardingComplete && !profile.name && !profile.locationCity)) return;
+  await supabase.from('user_profiles').upsert(
+    { id: userId, profile_data: profile, updated_at: new Date().toISOString() },
+    { onConflict: 'id' }
+  );
+}
+
+/** Pull user profile from Supabase — returns null if none stored yet */
+export async function pullUserProfile(userId: string): Promise<Partial<UserProfile> | null> {
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select('profile_data')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data.profile_data as Partial<UserProfile>;
+}
 
 // ── Push one prayer log to Supabase ─────────────────────────────────────────
 
@@ -63,7 +86,8 @@ export async function pushNightPrayerLog(log: NightPrayerLog, userId: string) {
 
 // ── Pull all cloud data → merge into local Dexie ────────────────────────────
 
-export async function pullFromCloud(userId: string): Promise<void> {
+/** Returns the cloud user profile if it exists (so caller can update user-store) */
+export async function pullFromCloud(userId: string): Promise<Partial<UserProfile> | null> {
   try {
     // Prayer logs
     const { data: prayerLogs } = await supabase
@@ -137,9 +161,20 @@ export async function pullFromCloud(userId: string): Promise<void> {
       }));
       await db.nightPrayerLog.bulkPut(mapped);
     }
+    // User profile — pull and merge into Dexie too
+    const cloudProfile = await pullUserProfile(userId);
+    if (cloudProfile && cloudProfile.onboardingComplete) {
+      // Merge: cloud profile wins for settings, keep local ID
+      const existing = await db.userProfile.get('local');
+      await db.userProfile.put({ ...existing, ...cloudProfile, id: 'local' } as UserProfile);
+      return cloudProfile;
+    }
+
+    return null;
   } catch (e) {
     // Sync failure is non-fatal — local data is the source of truth
     console.warn('[sync] pull failed:', e);
+    return null;
   }
 }
 
@@ -147,11 +182,12 @@ export async function pullFromCloud(userId: string): Promise<void> {
 
 export async function pushAllToCloud(userId: string): Promise<void> {
   try {
-    const [prayerLogs, qaza, fasting, night] = await Promise.all([
+    const [prayerLogs, qaza, fasting, night, profile] = await Promise.all([
       db.prayerLog.toArray(),
       db.qazaLedger.toArray(),
       db.fastingLog.toArray(),
       db.nightPrayerLog.toArray(),
+      db.userProfile.get('local'),
     ]);
 
     await Promise.allSettled([
@@ -159,6 +195,7 @@ export async function pushAllToCloud(userId: string): Promise<void> {
       ...qaza.map(l => pushQazaLedger(l, userId)),
       ...fasting.map(l => pushFastingLog(l, userId)),
       ...night.map(l => pushNightPrayerLog(l, userId)),
+      ...(profile ? [pushUserProfile(profile, userId)] : []),
     ]);
   } catch (e) {
     console.warn('[sync] push all failed:', e);
