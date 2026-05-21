@@ -1,19 +1,19 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 
+/**
+ * OAuth / magic-link callback.
+ * We cannot exchange the PKCE code on the server because the verifier
+ * lives in the browser's localStorage.  Redirect to the client page that
+ * does the exchange, forwarding the code param.
+ */
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
+  const next = searchParams.get('next') ?? '/';
 
-  if (code) {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL ?? '',
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
-    );
-    await supabase.auth.exchangeCodeForSession(code);
-  }
+  const params = new URLSearchParams();
+  if (code) params.set('code', code);
+  params.set('next', next);
 
-  // Redirect to root — root page checks auth state and sends to the right place
-  // (home if onboarding done, onboarding if not)
-  return NextResponse.redirect(`${origin}/`);
+  return NextResponse.redirect(`${origin}/auth/processing?${params.toString()}`);
 }

@@ -30,7 +30,24 @@ export async function signInWithPassword(email: string, password: string): Promi
 
 /** Create a new account with email + password (auto-confirmed — no verification email) */
 export async function signUpWithPassword(email: string, password: string): Promise<{ error: string | null }> {
-  const { error } = await supabase.auth.signUp({ email, password });
+  const { data, error } = await supabase.auth.signUp({ email, password });
+  if (error) return { error: error.message };
+  // Supabase silently returns no session when the email already exists
+  if (!data.session) {
+    return { error: 'An account with this email already exists. Try signing in, or use "Forgot password" to set a new password.' };
+  }
+  return { error: null };
+}
+
+/** Sign in with Apple Sign In (requires Apple provider enabled in Supabase dashboard) */
+export async function signInWithApple(): Promise<{ error: string | null }> {
+  const redirectTo = typeof window !== 'undefined'
+    ? `${window.location.origin}/auth/callback`
+    : '/auth/callback';
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'apple',
+    options: { redirectTo },
+  });
   return { error: error?.message ?? null };
 }
 

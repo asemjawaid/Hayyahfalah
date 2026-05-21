@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Settings, Moon, MapPin, Calculator, Users, Share2, Flame } from 'lucide-react';
+import { Settings, Moon, MapPin, Calculator, Users, Share2, Flame, ChevronLeft, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { useUserStore } from '@/store/user-store';
 import { usePrayerStore } from '@/store/prayer-store';
@@ -17,8 +17,9 @@ import { formatHijriDate } from '@/lib/hijri';
 import { getPrayerLabel } from '@/lib/terminology';
 import { todayString, formatDate } from '@/lib/utils';
 import type { PrayerName, PrayerStatus } from '@/lib/db';
-import { formatPrayerTime } from '@/lib/prayer-engine';
+import { formatPrayerTime, calculatePrayerTimes } from '@/lib/prayer-engine';
 import { db, getActiveCycle, endCycle, startCycle, getPrayerStreak } from '@/lib/db';
+import type { PrayerTimesResult } from '@/lib/prayer-engine';
 import { cn } from '@/lib/utils';
 
 const PRAYERS: PrayerName[] = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
@@ -26,13 +27,46 @@ const PRAYERS: PrayerName[] = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
 export default function HomePage() {
   const router = useRouter();
   const { profile, updateProfile } = useUserStore();
-  const { todayLogs, qazaLedger, loadForDate, loadQaza } = usePrayerStore();
-  const { times, nextPrayer, countdown, locate, recalculate, tick, lat, isLocating } = usePrayerTimesStore();
+  const { todayLogs, qazaLedger, loadForDate, loadQaza, setSelectedDate } = usePrayerStore();
+  const { times, nextPrayer, countdown, locate, recalculate, tick, lat, lng, isLocating } = usePrayerTimesStore();
   const { profiles, memberLogs, loadProfiles, loadLogsForDate } = useFamilyStore();
   const [showQazaEstimate, setShowQazaEstimate] = useState(false);
   const [activeCycle, setActiveCycle] = useState<any>(null);
   const [streak, setStreak] = useState(0);
   const [shareToast, setShareToast] = useState(false);
+  const [selectedDate, setLocalSelectedDate] = useState(todayString());
+  const [pastTimes, setPastTimes] = useState<PrayerTimesResult | null>(null);
+
+  const todayStr = todayString();
+  const isToday = selectedDate === todayStr;
+
+  function changeDate(dir: 'prev' | 'next') {
+    const d = new Date(selectedDate);
+    d.setDate(d.getDate() + (dir === 'next' ? 1 : -1));
+    const newDate = d.toISOString().split('T')[0];
+    // Don't go future beyond today
+    if (newDate > todayStr) return;
+    // Don't go back more than 90 days
+    const ninetyAgo = new Date(Date.now() - 90 * 86400000).toISOString().split('T')[0];
+    if (newDate < ninetyAgo) return;
+    setLocalSelectedDate(newDate);
+    setSelectedDate(newDate); // updates prayer-store to load that date's logs
+  }
+
+  // For past dates, calculate prayer times using stored lat/lng
+  useEffect(() => {
+    if (!isToday && lat !== null && lng !== null) {
+      const method = (profile?.calculationMethod as any) ?? 'MuslimWorldLeague';
+      const madhab = profile?.madhab === 'hanafi' ? 'hanafi' : 'shafi';
+      const pastDate = new Date(selectedDate + 'T12:00:00'); // noon to avoid DST issues
+      try {
+        const t = calculatePrayerTimes({ lat, lng, date: pastDate, method, madhab });
+        setPastTimes(t);
+      } catch { setPastTimes(null); }
+    } else {
+      setPastTimes(null);
+    }
+  }, [selectedDate, isToday, lat, lng]);
 
   useEffect(() => {
     if (profile && !profile.onboardingComplete) {
@@ -90,9 +124,11 @@ export default function HomePage() {
 
   const terminology = profile?.terminology ?? 'arabic';
   const totalQaza = Object.values(qazaLedger).reduce((sum, q) => sum + (q?.count ?? 0), 0);
-  const today = new Date();
-  const hijriDate = formatHijriDate(today);
-  const gregDate = formatDate(today);
+  const displayDate = new Date(selectedDate + 'T12:00:00');
+  const hijriDate = formatHijriDate(displayDate);
+  const gregDate = formatDate(displayDate);
+  // Use past-date prayer times when viewing a previous day
+  const displayTimes = isToday ? times : pastTimes;
 
   const nextPrayerLabel = nextPrayer
     ? getPrayerLabel(nextPrayer.name, terminology)
@@ -126,9 +162,7 @@ export default function HomePage() {
       <div className="sticky top-0 z-30 bg-[var(--bg-primary)]/95 backdrop-blur-sm border-b border-[var(--bg-secondary)]">
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
           <div>
-            <div className="font-arabic text-sm text-[var(--accent-primary)]">
-              {hijriDate}
-            </div>
+            <div className="font-arabic text-sm text-[var(--accent-primary)]">{hijriDate}</div>
             <div className="text-[var(--text-tertiary)] text-xs">{gregDate}</div>
           </div>
           <div className="flex items-center gap-1">
@@ -148,6 +182,41 @@ export default function HomePage() {
               <Settings size={20} className="text-[var(--text-secondary)]" />
             </Link>
           </div>
+        </div>
+
+        {/* Date navigator */}
+        <div className="max-w-lg mx-auto px-4 pb-2 flex items-center justify-between">
+          <button
+            onClick={() => changeDate('prev')}
+            className="p-1.5 rounded-lg hover:bg-[var(--bg-secondary)] transition-colors text-[var(--text-secondary)]"
+            aria-label="Previous day"
+          >
+            <ChevronLeft size={18} />
+          </button>
+
+          <button
+            onClick={() => {
+              setLocalSelectedDate(todayStr);
+              setSelectedDate(todayStr);
+            }}
+            className={cn(
+              'text-xs font-medium px-3 py-1 rounded-full transition-all',
+              isToday
+                ? 'text-[var(--accent-primary)] bg-[var(--accent-primary)]/10'
+                : 'text-[var(--text-secondary)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)]'
+            )}
+          >
+            {isToday ? 'Today' : selectedDate}
+          </button>
+
+          <button
+            onClick={() => changeDate('next')}
+            disabled={isToday}
+            className="p-1.5 rounded-lg hover:bg-[var(--bg-secondary)] transition-colors text-[var(--text-secondary)] disabled:opacity-30"
+            aria-label="Next day"
+          >
+            <ChevronRight size={18} />
+          </button>
         </div>
       </div>
 
@@ -171,8 +240,27 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Hero — Next prayer */}
-        <motion.div
+        {/* Past-date banner */}
+        {!isToday && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-[var(--accent-primary)]/10 border border-[var(--accent-primary)]/20 rounded-xl px-4 py-2.5 flex items-center justify-between"
+          >
+            <span className="text-[var(--accent-primary)] text-sm">
+              Logging prayers for {selectedDate}
+            </span>
+            <button
+              onClick={() => { setLocalSelectedDate(todayStr); setSelectedDate(todayStr); }}
+              className="text-[var(--accent-primary)] text-xs underline underline-offset-2"
+            >
+              Back to today
+            </button>
+          </motion.div>
+        )}
+
+        {/* Hero — Next prayer (today only) */}
+        {isToday && <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           className="bg-[var(--bg-secondary)] rounded-2xl p-6 text-center space-y-2"
@@ -210,10 +298,10 @@ export default function HomePage() {
               )}
             </div>
           )}
-        </motion.div>
+        </motion.div>}
 
-        {/* Streak badge */}
-        {streak > 0 && (
+        {/* Streak badge (today only) */}
+        {isToday && streak > 0 && (
           <div className="flex justify-center">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-sm font-medium">
               <Flame size={15} />
@@ -225,11 +313,11 @@ export default function HomePage() {
         )}
 
         {/* Sunrise (informational) */}
-        {times?.sunrise && (
+        {displayTimes?.sunrise && (
           <div className="flex items-center gap-2 px-2">
             <div className="flex-1 h-px bg-[var(--bg-tertiary)]" />
             <span className="text-[var(--text-tertiary)] text-xs">
-              Sunrise {formatPrayerTime(times.sunrise)}
+              Sunrise {formatPrayerTime(displayTimes.sunrise)}
             </span>
             <div className="flex-1 h-px bg-[var(--bg-tertiary)]" />
           </div>
@@ -239,12 +327,12 @@ export default function HomePage() {
         <div className="space-y-2">
           {PRAYERS.map((prayer) => (
             <PrayerRow
-              key={prayer}
+              key={`${prayer}-${selectedDate}`}
               prayer={prayer}
-              times={times ?? ({} as any)}
+              times={displayTimes ?? ({} as any)}
               log={todayLogs[prayer]}
               terminology={terminology as any}
-              isCurrent={nextPrayer?.name === prayer}
+              isCurrent={isToday && nextPrayer?.name === prayer}
               cycleActive={!!(profile?.womensModeEnabled && activeCycle && !activeCycle.endDate)}
             />
           ))}

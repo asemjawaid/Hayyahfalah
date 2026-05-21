@@ -1,7 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
-import { supabase, signInWithPassword, signUpWithPassword, signInWithGoogle, signOut, type SupabaseUser } from '@/lib/supabase';
+import { supabase, signInWithPassword, signUpWithPassword, signInWithGoogle as _signInWithGoogle, signOut, type SupabaseUser } from '@/lib/supabase';
 import { pullFromCloud, pushAllToCloud } from '@/lib/sync';
 import { setSyncUser } from '@/lib/sync-user';
 import { useUserStore } from '@/store/user-store';
@@ -84,9 +84,9 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   signInWithGoogle: async () => {
     set({ error: null });
-    const { error } = await signInWithGoogle();
+    const { error } = await _signInWithGoogle();
     if (error) set({ error });
-    // OAuth redirect — page will reload; onAuthStateChange handles on return
+    // OAuth redirect — page reloads on return; onAuthStateChange handles session
   },
 
   logout: async () => {
