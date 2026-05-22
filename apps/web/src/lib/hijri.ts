@@ -56,17 +56,18 @@ export interface IslamicEvent {
 }
 
 export const ISLAMIC_EVENTS: IslamicEvent[] = [
-  { name: 'Islamic New Year', nameAr: 'رأس السنة الهجرية', hijriMonth: 1, hijriDay: 1, notifyDaysBefore: 3, description: 'First day of Muharram' },
-  { name: "Ashura", nameAr: 'عاشوراء', hijriMonth: 1, hijriDay: 10, notifyDaysBefore: 4, description: 'Recommended fast — expiation of past year' },
-  { name: 'Mawlid al-Nabi', nameAr: 'المولد النبوي', hijriMonth: 3, hijriDay: 12, notifyDaysBefore: 3, description: "Prophet's ﷺ birthday (informational)" },
-  { name: "Isra and Mi'raj", nameAr: 'الإسراء والمعراج', hijriMonth: 7, hijriDay: 27, notifyDaysBefore: 3, description: 'Night journey of the Prophet ﷺ' },
-  { name: "Laylat al-Bara'ah", nameAr: 'ليلة البراءة', hijriMonth: 8, hijriDay: 15, notifyDaysBefore: 2, description: 'Night of Forgiveness (15th Sha\'ban)' },
-  { name: 'First day of Ramadan', nameAr: 'أول رمضان', hijriMonth: 9, hijriDay: 1, notifyDaysBefore: 5, description: 'The blessed month of fasting begins' },
-  { name: "Laylat al-Qadr (27th)", nameAr: 'ليلة القدر', hijriMonth: 9, hijriDay: 27, notifyDaysBefore: 2, description: 'Night of Power — better than 1000 months' },
-  { name: 'Eid al-Fitr', nameAr: 'عيد الفطر', hijriMonth: 10, hijriDay: 1, notifyDaysBefore: 3, description: 'Festival of Breaking the Fast' },
-  { name: 'First 10 days of Dhul Hijjah', nameAr: 'عشر ذي الحجة', hijriMonth: 12, hijriDay: 1, notifyDaysBefore: 5, description: 'Best days of the year — increase worship' },
-  { name: 'Day of Arafah', nameAr: 'يوم عرفة', hijriMonth: 12, hijriDay: 9, notifyDaysBefore: 4, description: 'Recommended fast — expiates two years of sins' },
-  { name: 'Eid al-Adha', nameAr: 'عيد الأضحى', hijriMonth: 12, hijriDay: 10, notifyDaysBefore: 3, description: 'Festival of Sacrifice' },
+  { name: 'Islamic New Year',         nameAr: 'رأس السنة الهجرية', hijriMonth:  1, hijriDay:  1, notifyDaysBefore: 3, description: 'First day of Muharram — a new Hijri year begins. Reflect and set intentions.' },
+  { name: 'Fast of Ashura',           nameAr: 'عاشوراء',           hijriMonth:  1, hijriDay: 10, notifyDaysBefore: 4, description: 'Fast today (10 Muharram) — expiates the sins of the past year. Also fast the 9th.' },
+  { name: "Mawlid al-Nabi ﷺ",        nameAr: 'المولد النبوي',      hijriMonth:  3, hijriDay: 12, notifyDaysBefore: 3, description: "Birth of the Prophet Muhammad ﷺ — send salawat abundantly today." },
+  { name: "Isra and Mi'raj",          nameAr: 'الإسراء والمعراج',  hijriMonth:  7, hijriDay: 27, notifyDaysBefore: 3, description: "Night journey and Ascension of the Prophet ﷺ — the gift of 5 daily prayers." },
+  { name: "Laylat al-Bara'ah",        nameAr: 'ليلة البراءة',      hijriMonth:  8, hijriDay: 15, notifyDaysBefore: 2, description: "Night of Forgiveness (15 Sha'ban) — worship and seek forgiveness." },
+  { name: 'Ramadan begins',           nameAr: 'أول رمضان',         hijriMonth:  9, hijriDay:  1, notifyDaysBefore: 5, description: 'The blessed month of Ramadan has begun! Begin your fasts, increase Quran and prayer.' },
+  { name: "Laylat al-Qadr (27th)",    nameAr: 'ليلة القدر',        hijriMonth:  9, hijriDay: 27, notifyDaysBefore: 2, description: "Night of Power — better than 1000 months. Pray, seek forgiveness, and recite: Allāhumma innaka ʿafuwwun..." },
+  { name: 'Zakat al-Fitr due',        nameAr: 'زكاة الفطر',        hijriMonth:  9, hijriDay: 28, notifyDaysBefore: 3, description: 'Pay Zakat al-Fitr before Eid prayer — purification of your fast and aid for the poor.' },
+  { name: 'Eid al-Fitr',             nameAr: 'عيد الفطر',          hijriMonth: 10, hijriDay:  1, notifyDaysBefore: 3, description: 'Eid Mubarak! 🌙 Attend Eid prayer, pay Zakat al-Fitr if not done, and celebrate with family.' },
+  { name: 'First 10 days of Dhul Hijjah', nameAr: 'عشر ذي الحجة', hijriMonth: 12, hijriDay:  1, notifyDaysBefore: 5, description: 'The best 10 days of the year have begun! Fast, give charity, and remember Allah abundantly.' },
+  { name: 'Fast of Arafah',          nameAr: 'يوم عرفة',           hijriMonth: 12, hijriDay:  9, notifyDaysBefore: 4, description: 'Fast today (9 Dhul Hijjah) — expiates sins of 2 years! Pilgrims stand at Arafah today.' },
+  { name: 'Eid al-Adha',            nameAr: 'عيد الأضحى',          hijriMonth: 12, hijriDay: 10, notifyDaysBefore: 3, description: 'Eid al-Adha Mubarak! 🐑 Attend Eid prayer and remember the sacrifice of Ibrahim ﷺ.' },
 ];
 
 export function isSunnahFastDay(date: Date): boolean {

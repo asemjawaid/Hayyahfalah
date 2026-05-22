@@ -13,8 +13,8 @@ import { PrayerRow } from '@/components/prayer/prayer-row';
 import { BottomNav } from '@/components/ui/nav';
 import { NightPrayerSection } from '@/components/home/night-prayer-section';
 import { QazaEstimationModal } from '@/components/home/qaza-estimation-modal';
-import { formatHijriDate } from '@/lib/hijri';
-import { getPrayerLabel } from '@/lib/terminology';
+import { formatHijriDate, ISLAMIC_EVENTS, toHijri } from '@/lib/hijri';
+import { getPrayerLabel, getJumuahLabel } from '@/lib/terminology';
 import { todayString, formatDate } from '@/lib/utils';
 import type { PrayerName, PrayerStatus } from '@/lib/db';
 import { formatPrayerTime, calculatePrayerTimes } from '@/lib/prayer-engine';
@@ -139,10 +139,24 @@ export default function HomePage() {
     return () => clearInterval(interval);
   }, [tick]);
 
-  // Browser notifications
+  // Browser notifications — prayer times (Friday-aware)
   useEffect(() => {
     if (!times || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
-    const labels: Record<string, string> = { fajr: 'Fajr', dhuhr: 'Dhuhr', asr: 'Asr', maghrib: 'Maghrib', isha: "Isha'" };
+    const isFriday = new Date().getDay() === 5;
+    const labels: Record<string, string> = {
+      fajr: 'Fajr',
+      dhuhr: isFriday ? "Jumu'ah" : 'Dhuhr',
+      asr: 'Asr',
+      maghrib: 'Maghrib',
+      isha: "Isha'",
+    };
+    const bodies: Record<string, string> = {
+      fajr: 'Time for Fajr. Rise and pray before sunrise.',
+      dhuhr: isFriday ? "Jumu'ah is beginning. Head to the masjid." : 'Dhuhr time. Take a moment for prayer.',
+      asr: 'Asr time. Do not delay — the window is short.',
+      maghrib: 'Maghrib time. Break your fast and pray.',
+      isha: "Isha' time. End your day with gratitude.",
+    };
     const now = Date.now();
     const timers: ReturnType<typeof setTimeout>[] = [];
     (['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'] as const).forEach(prayer => {
@@ -152,7 +166,7 @@ export default function HomePage() {
       if (ms > 0 && ms < 24 * 60 * 60 * 1000) {
         timers.push(setTimeout(() => {
           new Notification(`🕌 ${labels[prayer]} time`, {
-            body: 'It is time to pray. May Allah accept your worship.',
+            body: bodies[prayer] ?? 'It is time to pray. May Allah accept your worship.',
             icon: '/icon-192.png', tag: `prayer-${prayer}`,
           });
         }, ms));
@@ -160,6 +174,47 @@ export default function HomePage() {
     });
     return () => timers.forEach(clearTimeout);
   }, [times]);
+
+  // Islamic event notifications — fire once per event per year
+  useEffect(() => {
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+
+    const STORAGE_KEY = 'hayya_event_notifs_v1';
+    let notified: Record<string, string> = {};
+    try { notified = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch {}
+
+    const today = new Date();
+    let changed = false;
+
+    for (const event of ISLAMIC_EVENTS) {
+      // Check today + next `notifyDaysBefore` days
+      for (let d = 0; d <= event.notifyDaysBefore; d++) {
+        const checkDate = new Date(today.getTime() + d * 86_400_000);
+        const h = toHijri(checkDate);
+        if (h.month === event.hijriMonth && h.day === event.hijriDay) {
+          const key = `${event.name}-${h.year}`;
+          if (!notified[key]) {
+            const when = d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : `In ${d} days`;
+            const emoji = event.hijriMonth === 10 || event.hijriMonth === 12 ? '🌙' :
+                          event.hijriMonth === 9 ? '🌙' : '📅';
+            new Notification(`${emoji} ${event.name} — ${when}`, {
+              body: event.description,
+              icon: '/icon-192.png',
+              tag: `islamic-event-${key.replace(/[\s']/g, '-')}`,
+            });
+            notified[key] = new Date().toISOString();
+            changed = true;
+          }
+          break;
+        }
+      }
+    }
+
+    if (changed) {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(notified)); } catch {}
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run once on mount
 
   // ── Auto-finalize missed prayers whose window has already expired ──────────
   useEffect(() => {
@@ -250,8 +305,11 @@ export default function HomePage() {
   const displayDate = new Date(selectedDate + 'T12:00:00');
   const hijriDate = formatHijriDate(displayDate);
   const gregDate = formatDate(displayDate);
+  const isFridayToday = new Date().getDay() === 5;
   // displayTimes is hoisted above effects — see declaration near top of component
-  const nextPrayerLabel = nextPrayer ? getPrayerLabel(nextPrayer.name, terminology) : null;
+  const nextPrayerLabel = nextPrayer
+    ? (nextPrayer.name === 'dhuhr' && isFridayToday ? getJumuahLabel(terminology as any) : getPrayerLabel(nextPrayer.name, terminology as any))
+    : null;
 
   // Ring calculation — only count prayers that were actually performed
   const isPrayerDone = (p: PrayerName): boolean => {

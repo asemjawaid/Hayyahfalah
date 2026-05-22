@@ -35,7 +35,7 @@ export type Theme =
   | 'clay_dark'
   | 'clay_light';
 export type ColorMode = 'dark' | 'light' | 'auto';
-export type Terminology = 'arabic' | 'urdu' | 'indonesian' | 'malay' | 'turkish';
+export type Terminology = 'arabic' | 'urdu' | 'pashto' | 'indonesian' | 'malay' | 'turkish';
 
 export interface UserProfile {
   id: string;

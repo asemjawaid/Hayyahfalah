@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   BookOpen, Moon, Sun, Plus, Check, Share2, Flame,
-  RotateCcw, X, Trash2, UtensilsCrossed, Star,
+  RotateCcw, X, Trash2, UtensilsCrossed, Star, Search, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { BottomNav } from '@/components/ui/nav';
 import {
@@ -21,16 +21,18 @@ import { usePrayerTimesStore } from '@/store/prayer-times-store';
 import { useUserStore } from '@/store/user-store';
 import { formatPrayerTime } from '@/lib/prayer-engine';
 import { todayString, cn } from '@/lib/utils';
+import { DUAS, DUA_CATEGORIES, searchDuas, getDuasByCategory, type DuaCategory, type Dua } from '@/lib/duas';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-type TabId = 'today' | 'quran' | 'fast' | 'dhikr';
+type TabId = 'today' | 'quran' | 'fast' | 'dhikr' | 'dua';
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'today', label: 'Today' },
   { id: 'quran', label: 'Quran' },
   { id: 'fast',  label: 'Fast' },
   { id: 'dhikr', label: 'Dhikr' },
+  { id: 'dua',   label: 'Dua' },
 ];
 
 const PRESET_HABITS: Omit<HabitDef, 'id' | 'createdAt' | 'active'>[] = [
@@ -52,12 +54,17 @@ const PRESET_HABITS: Omit<HabitDef, 'id' | 'createdAt' | 'active'>[] = [
 const CUSTOM_EMOJIS = ['✨', '⭐', '🎯', '💪', '🙏', '🌸', '🔑', '🌟', '📝', '🎨', '🧘', '🌿'];
 
 const DHIKR_OPTIONS = [
-  { id: 'subhanallah',   label: 'SubhanAllah',      arabic: 'سُبْحَانَ اللَّه',      target: 33  },
-  { id: 'alhamdulillah', label: 'Alhamdulillah',    arabic: 'الْحَمْدُ لِلَّه',      target: 33  },
-  { id: 'allahu_akbar',  label: 'Allahu Akbar',     arabic: 'اللَّهُ أَكْبَر',       target: 34  },
-  { id: 'la_ilaha',      label: 'Lā ilāha illallāh', arabic: 'لَا إِلٰهَ إِلَّا اللَّه', target: 100 },
-  { id: 'astaghfirullah',label: 'Astaghfirullāh',   arabic: 'أَسْتَغْفِرُ اللَّه',   target: 100 },
-  { id: 'salawat',       label: 'Salawāt',           arabic: 'اللَّهُمَّ صَلِّ عَلَى مُحَمَّد', target: 100 },
+  { id: 'subhanallah',      label: 'SubhanAllah',         arabic: 'سُبْحَانَ اللَّه',                                                                    transliteration: 'SubḥānAllāh',                                                         target: 33  },
+  { id: 'alhamdulillah',   label: 'Alhamdulillah',       arabic: 'الْحَمْدُ لِلَّه',                                                                    transliteration: 'Alḥamdulillāh',                                                       target: 33  },
+  { id: 'allahu_akbar',    label: 'Allahu Akbar',         arabic: 'اللَّهُ أَكْبَر',                                                                     transliteration: 'Allāhu Akbar',                                                         target: 34  },
+  { id: 'la_ilaha',        label: 'Lā ilāha illallāh',   arabic: 'لَا إِلٰهَ إِلَّا اللَّه',                                                            transliteration: 'Lā ilāha illAllāh',                                                    target: 100 },
+  { id: 'astaghfirullah',  label: 'Astaghfirullāh',      arabic: 'أَسْتَغْفِرُ اللَّه',                                                                 transliteration: 'Astaghfirullāh',                                                       target: 100 },
+  { id: 'salawat',         label: 'Salawāt',              arabic: 'اللَّهُمَّ صَلِّ عَلَى مُحَمَّد',                                                     transliteration: 'Allāhumma ṣalli ʿalā Muḥammad',                                       target: 100 },
+  { id: 'dua_yunus',       label: 'Dua of Yunus',         arabic: 'لَا إِلَٰهَ إِلَّا أَنتَ سُبْحَانَكَ إِنِّي كُنتُ مِنَ الظَّالِمِينَ',              transliteration: 'Lā ilāha illā anta subḥānaka innī kuntu mina ẓ-ẓālimīn',               target: 40  },
+  { id: 'hasbiyallah',     label: 'Hasbiyallāh',          arabic: 'حَسْبِيَ اللَّهُ لَا إِلَٰهَ إِلَّا هُوَ عَلَيْهِ تَوَكَّلْتُ',                     transliteration: 'Ḥasbiyallāhu lā ilāha illā huwa ʿalayhi tawakkaltu',                  target: 7   },
+  { id: 'la_hawla',        label: 'La Hawla',             arabic: 'لَا حَوْلَ وَلَا قُوَّةَ إِلَّا بِاللَّه',                                            transliteration: 'Lā ḥawla wa lā quwwata illā billāh',                                  target: 100 },
+  { id: 'subhanallah_azim',label: 'SubhānAllāh wa Biḥamdih', arabic: 'سُبْحَانَ اللَّهِ وَبِحَمْدِهِ',                                                 transliteration: 'SubḥānAllāhi wa biḥamdihī',                                            target: 100 },
+  { id: 'laylatul_qadr',   label: 'Dua of Forgiveness',   arabic: 'اللَّهُمَّ إِنَّكَ عَفُوٌّ تُحِبُّ الْعَفْوَ فَاعْفُ عَنِّي',                       transliteration: "Allāhumma innaka ʿafuwwun tuḥibbul-ʿafwa faʿfu ʿannī",                target: 100 },
 ];
 
 const FAST_STATUS_CONFIG: Record<FastStatus, { label: string; color: string; icon: string }> = {
@@ -109,6 +116,7 @@ export default function HabitsPage() {
         {tab === 'quran' && <QuranTab />}
         {tab === 'fast'  && <FastTab />}
         {tab === 'dhikr' && <DhikrTab />}
+        {tab === 'dua'   && <DuaTab />}
       </div>
 
       <BottomNav />
@@ -1144,7 +1152,7 @@ function DhikrTab() {
   }
 
   function share() {
-    const text = `I completed ${count}× ${selected.label} (${selected.arabic}) today 🤲\n— tracked with Hayya Falah`;
+    const text = `I completed ${count}× ${selected.label} today 🤲\n${selected.arabic}\n(${selected.transliteration})\n— tracked with Hayya Falah`;
     if (typeof navigator !== 'undefined' && navigator.share) {
       navigator.share({ text }).catch(() => {});
     } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
@@ -1180,9 +1188,14 @@ function DhikrTab() {
 
       {/* Main counter card */}
       <div className="bg-[var(--bg-secondary)] rounded-2xl p-6 flex flex-col items-center gap-4">
-        {/* Arabic text */}
-        <div className="font-arabic text-2xl text-[var(--accent-primary)] text-center">
-          {selected.arabic}
+        {/* Arabic text + transliteration */}
+        <div className="text-center space-y-1">
+          <div className="font-arabic text-xl text-[var(--accent-primary)]">
+            {selected.arabic}
+          </div>
+          <div className="text-[var(--text-tertiary)] text-xs italic">
+            {selected.transliteration}
+          </div>
         </div>
 
         {/* Count */}
@@ -1267,6 +1280,166 @@ function DhikrTab() {
           "The best words are four: SubhanAllah, Alhamdulillah, Lā ilāha illallāh, Allahu Akbar."
         </p>
         <p className="text-[var(--text-tertiary)] text-xs mt-0.5">— Muslim</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Dua Tab ─────────────────────────────────────────────────────────────────
+
+function DuaCard({ dua }: { dua: Dua }) {
+  const [expanded, setExpanded] = useState(false);
+
+  function share() {
+    const text = `${dua.title}\n\n${dua.arabic}\n\n${dua.transliteration}\n\n${dua.translation}\n\nSource: ${dua.source}\n\n— Hayya Falah`;
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      navigator.share({ text }).catch(() => {});
+    } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(text).catch(() => {});
+    }
+  }
+
+  return (
+    <motion.div
+      layout
+      className="bg-[var(--bg-secondary)] rounded-2xl overflow-hidden"
+    >
+      <button
+        onClick={() => setExpanded(e => !e)}
+        className="w-full px-4 py-4 text-left flex items-start justify-between gap-3"
+      >
+        <div className="flex-1 min-w-0">
+          <div className="text-[var(--text-primary)] font-medium text-sm">{dua.title}</div>
+          <div className="font-arabic text-base text-[var(--accent-primary)] mt-1 leading-relaxed text-right">
+            {expanded ? dua.arabic : dua.arabic.length > 60 ? dua.arabic.slice(0, 60) + '…' : dua.arabic}
+          </div>
+        </div>
+        <div className="shrink-0 mt-1 text-[var(--text-tertiary)]">
+          {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </div>
+      </button>
+
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 pb-4 space-y-3 border-t border-[var(--bg-tertiary)] pt-3">
+              {/* Full Arabic */}
+              <div className="font-arabic text-lg text-[var(--accent-primary)] text-right leading-relaxed">
+                {dua.arabic}
+              </div>
+              {/* Transliteration */}
+              <div className="text-[var(--text-secondary)] text-sm italic leading-relaxed">
+                {dua.transliteration}
+              </div>
+              {/* Translation */}
+              <div className="text-[var(--text-primary)] text-sm leading-relaxed">
+                {dua.translation}
+              </div>
+              {/* Source */}
+              <div className="text-[var(--text-tertiary)] text-xs leading-relaxed bg-[var(--bg-tertiary)] rounded-xl px-3 py-2">
+                📖 {dua.source}
+              </div>
+              {/* Share button */}
+              <button
+                onClick={share}
+                className="flex items-center gap-1.5 text-[var(--accent-primary)] text-xs py-1"
+              >
+                <Share2 size={12} /> Share this dua
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+function DuaTab() {
+  const [query,    setQuery]    = useState('');
+  const [category, setCategory] = useState<DuaCategory | 'all'>('all');
+
+  const filtered = query
+    ? searchDuas(query)
+    : category === 'all'
+    ? DUAS
+    : getDuasByCategory(category);
+
+  const categoryKeys = Object.keys(DUA_CATEGORIES) as DuaCategory[];
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="bg-[var(--bg-secondary)] rounded-2xl p-4 text-center">
+        <div className="font-arabic text-2xl text-[var(--accent-primary)]">ادْعُونِي أَسْتَجِبْ لَكُمْ</div>
+        <div className="text-[var(--text-tertiary)] text-xs mt-1">"Call upon Me; I will respond to you." — Quran 40:60</div>
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]" />
+        <input
+          value={query}
+          onChange={e => { setQuery(e.target.value); if (e.target.value) setCategory('all'); }}
+          placeholder="Search duas…"
+          className="w-full pl-9 pr-4 py-2.5 bg-[var(--bg-secondary)] rounded-xl text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] text-sm focus:outline-none focus:ring-1 focus:ring-[var(--accent-primary)]/40"
+        />
+      </div>
+
+      {/* Category pills */}
+      {!query && (
+        <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+          <button
+            onClick={() => setCategory('all')}
+            className={cn(
+              'px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 transition-all',
+              category === 'all'
+                ? 'bg-[var(--accent-primary)] text-[#0D1421]'
+                : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)]',
+            )}
+          >
+            All ({DUAS.length})
+          </button>
+          {categoryKeys.map(k => {
+            const cat = DUA_CATEGORIES[k];
+            const count = getDuasByCategory(k).length;
+            return (
+              <button
+                key={k}
+                onClick={() => setCategory(k)}
+                className={cn(
+                  'px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 transition-all flex items-center gap-1',
+                  category === k
+                    ? 'bg-[var(--accent-primary)] text-[#0D1421]'
+                    : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)]',
+                )}
+              >
+                {cat.emoji} {cat.label} ({count})
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Results */}
+      <div className="space-y-2">
+        {filtered.length === 0 ? (
+          <div className="text-center py-8 text-[var(--text-tertiary)] text-sm">
+            No duas found for "{query}"
+          </div>
+        ) : (
+          filtered.map(dua => <DuaCard key={dua.id} dua={dua} />)
+        )}
+      </div>
+
+      {/* Footer note */}
+      <div className="text-center py-2 text-[var(--text-tertiary)] text-xs">
+        All duas sourced from Quran and authenticated hadith collections.
       </div>
     </div>
   );

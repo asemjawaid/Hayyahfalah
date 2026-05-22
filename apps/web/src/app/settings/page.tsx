@@ -32,17 +32,19 @@ const THEMES: { id: Theme; name: string; mode: string }[] = [
 ];
 
 const TERMINOLOGIES: { id: Terminology; label: string; example: string }[] = [
-  { id: 'arabic', label: 'Arabic', example: 'Salah · Sawm · Wudu' },
-  { id: 'urdu', label: 'Urdu / Persian', example: 'Namaz · Roza · Wuzu' },
-  { id: 'indonesian', label: 'Indonesian', example: 'Shalat · Puasa · Wudhu' },
-  { id: 'malay', label: 'Malay', example: 'Solat · Puasa · Wuduk' },
-  { id: 'turkish', label: 'Turkish', example: 'Namaz · Oruç · Abdest' },
+  { id: 'arabic',    label: 'Arabic',          example: 'Salah · Sawm · Wudu' },
+  { id: 'urdu',      label: 'Urdu / Dari',     example: 'Namaz · Roza · Wuzu' },
+  { id: 'pashto',    label: 'Pashto',          example: 'Lmunj · Rōja · Wuzū' },
+  { id: 'indonesian',label: 'Indonesian',      example: 'Shalat · Puasa · Wudhu' },
+  { id: 'malay',     label: 'Malay',           example: 'Solat · Puasa · Wuduk' },
+  { id: 'turkish',   label: 'Turkish',         example: 'Namaz · Oruç · Abdest' },
 ];
 
 const LANGUAGES = [
   { code: 'en', label: 'English' },
   { code: 'ar', label: 'العربية' },
   { code: 'ur', label: 'اُردُو' },
+  { code: 'ps', label: 'پښتو (Pashto)' },
   { code: 'id', label: 'Bahasa Indonesia' },
   { code: 'tr', label: 'Türkçe' },
   { code: 'fr', label: 'Français' },

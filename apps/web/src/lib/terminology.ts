@@ -1,6 +1,8 @@
 import type { Terminology } from './db';
 
-type TermKey = 'prayer' | 'prayers' | 'fast' | 'ablution' | 'missed_prayer' | 'almsgiving' | 'pilgrimage' | 'fajr' | 'dhuhr' | 'asr' | 'maghrib' | 'isha';
+type TermKey =
+  | 'prayer' | 'prayers' | 'fast' | 'ablution' | 'missed_prayer'
+  | 'almsgiving' | 'pilgrimage' | 'fajr' | 'dhuhr' | 'asr' | 'maghrib' | 'isha' | 'jumua';
 
 type TermMap = Record<TermKey, string>;
 
@@ -18,10 +20,11 @@ const TERMS: Record<Terminology, TermMap> = {
     asr: 'Asr',
     maghrib: 'Maghrib',
     isha: "Isha'",
+    jumua: "Jumu'ah",
   },
   urdu: {
     prayer: 'Namaz',
-    prayers: 'Namazein',
+    prayers: 'Namazain',
     fast: 'Roza',
     ablution: 'Wuzu',
     missed_prayer: 'Qaza',
@@ -32,6 +35,22 @@ const TERMS: Record<Terminology, TermMap> = {
     asr: 'Asr',
     maghrib: 'Maghrib',
     isha: 'Isha',
+    jumua: "Jumu'ah / Juma",
+  },
+  pashto: {
+    prayer: 'Lmunj',
+    prayers: 'Lmunji',
+    fast: 'Rōja',
+    ablution: 'Wuzū',
+    missed_prayer: 'Qaza',
+    almsgiving: 'Zakat',
+    pilgrimage: 'Hajj',
+    fajr: 'Fajr',
+    dhuhr: 'Dhuhr',
+    asr: 'Asr',
+    maghrib: 'Maghrib',
+    isha: 'Isha',
+    jumua: "Jumu'ah",
   },
   indonesian: {
     prayer: 'Shalat',
@@ -46,6 +65,7 @@ const TERMS: Record<Terminology, TermMap> = {
     asr: 'Ashar',
     maghrib: 'Maghrib',
     isha: 'Isya',
+    jumua: "Jum'at",
   },
   malay: {
     prayer: 'Solat',
@@ -60,6 +80,7 @@ const TERMS: Record<Terminology, TermMap> = {
     asr: 'Asar',
     maghrib: 'Maghrib',
     isha: 'Isyak',
+    jumua: 'Jumaat',
   },
   turkish: {
     prayer: 'Namaz',
@@ -74,6 +95,7 @@ const TERMS: Record<Terminology, TermMap> = {
     asr: 'İkindi',
     maghrib: 'Akşam',
     isha: 'Yatsı',
+    jumua: 'Cuma',
   },
 };
 
@@ -88,4 +110,8 @@ export function getPrayerLabel(prayer: string, terminology: Terminology = 'arabi
   const key = keyMap[prayer];
   if (!key) return prayer;
   return getTerm(key, terminology);
+}
+
+export function getJumuahLabel(terminology: Terminology = 'arabic'): string {
+  return getTerm('jumua', terminology);
 }
