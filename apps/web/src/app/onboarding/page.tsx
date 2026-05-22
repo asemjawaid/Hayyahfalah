@@ -24,22 +24,24 @@ const THEMES: { id: Theme; name: string; mode: string; colors: string[] }[] = [
 ];
 
 const LANGUAGES = [
-  { code: 'en', name: 'English', native: 'English' },
-  { code: 'ar', name: 'Arabic', native: 'العربية' },
-  { code: 'ur', name: 'Urdu', native: 'اُردُو' },
+  { code: 'en', name: 'English',    native: 'English' },
+  { code: 'ar', name: 'Arabic',     native: 'العربية' },
+  { code: 'ur', name: 'Urdu',       native: 'اُردُو' },
+  { code: 'ps', name: 'Pashto',     native: 'پښتو' },
   { code: 'id', name: 'Indonesian', native: 'Bahasa Indonesia' },
-  { code: 'tr', name: 'Turkish', native: 'Türkçe' },
-  { code: 'fr', name: 'French', native: 'Français' },
-  { code: 'bn', name: 'Bengali', native: 'বাংলা' },
-  { code: 'ms', name: 'Malay', native: 'Bahasa Melayu' },
+  { code: 'tr', name: 'Turkish',    native: 'Türkçe' },
+  { code: 'fr', name: 'French',     native: 'Français' },
+  { code: 'bn', name: 'Bengali',    native: 'বাংলা' },
+  { code: 'ms', name: 'Malay',      native: 'Bahasa Melayu' },
 ];
 
 const TERMINOLOGIES: { id: Terminology; label: string; example: string }[] = [
-  { id: 'arabic', label: 'Arabic', example: 'Salah / Sawm / Wudu' },
-  { id: 'urdu', label: 'Urdu/Persian', example: 'Namaz / Roza / Wuzu' },
+  { id: 'arabic',     label: 'Arabic',     example: 'Salah / Sawm / Wudu' },
+  { id: 'urdu',       label: 'Urdu / Dari', example: 'Namaz / Roza / Wuzu' },
+  { id: 'pashto',     label: 'Pashto',     example: 'Lmunj / Rōja / Wuzū' },
   { id: 'indonesian', label: 'Indonesian', example: 'Shalat / Puasa / Wudhu' },
-  { id: 'malay', label: 'Malay', example: 'Solat / Puasa / Wuduk' },
-  { id: 'turkish', label: 'Turkish', example: 'Namaz / Oruç / Abdest' },
+  { id: 'malay',      label: 'Malay',      example: 'Solat / Puasa / Wuduk' },
+  { id: 'turkish',    label: 'Turkish',    example: 'Namaz / Oruç / Abdest' },
 ];
 
 const METHODS = Object.entries(CALCULATION_METHOD_LABELS)

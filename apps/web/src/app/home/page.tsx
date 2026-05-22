@@ -70,6 +70,7 @@ function getWindowEndTime(prayer: PrayerName, times: PrayerTimesResult): Date | 
 export default function HomePage() {
   const router = useRouter();
   const { profile } = useUserStore();
+  const t = useT();
   const { todayLogs, qazaLedger, loadForDate, loadQaza, setSelectedDate } = usePrayerStore();
   const { times, nextPrayer, countdown, locate, recalculate, tick, lat, lng, isLocating } = usePrayerTimesStore();
   const { profiles, memberLogs, loadProfiles, loadLogsForDate } = useFamilyStore();
@@ -301,7 +302,6 @@ export default function HomePage() {
     PRAYERS.map(p => `${todayLogs[p]?.status}-${todayLogs[p]?.qazaFinalized}`)
   ), selectedDate]);
 
-  const t = useT();
   const terminology = profile?.terminology ?? 'arabic';
   const totalQaza = Object.values(qazaLedger).reduce((sum, q) => sum + (q?.count ?? 0), 0);
   const displayDate = new Date(selectedDate + 'T12:00:00');
