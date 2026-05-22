@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import type { Theme, Madhab, Terminology, Gender } from '@/lib/db';
 import { db } from '@/lib/db';
 import Link from 'next/link';
+import { useT } from '@/lib/i18n';
 
 type Section =
   | null | 'profile' | 'appearance' | 'language' | 'calculation'
@@ -56,6 +57,7 @@ export default function SettingsPage() {
   const [section, setSection] = useState<Section>(null);
   const { profile, updateProfile } = useUserStore();
   const { setCalculationSettings } = usePrayerTimesStore();
+  const t = useT();
 
   async function handleUpdateProfile(updates: Parameters<typeof updateProfile>[0]) {
     updateProfile(updates);
@@ -83,21 +85,21 @@ export default function SettingsPage() {
   if (section === 'about') return <AboutSection onBack={() => setSection(null)} />;
 
   const sections = [
-    { id: 'profile', icon: User, label: 'Account & Profile', desc: profile?.name || 'Optional' },
-    { id: 'appearance', icon: Palette, label: 'Appearance', desc: profile?.theme?.replace('_', ' ') ?? 'Fajr Dark' },
-    { id: 'language', icon: Globe, label: 'Language & Terminology', desc: (profile?.language?.toUpperCase() ?? 'EN') + ' · ' + (profile?.terminology ?? 'arabic') },
-    { id: 'calculation', icon: Clock, label: 'Prayer Calculation', desc: CALCULATION_METHOD_LABELS[profile?.calculationMethod as CalculationMethodKey] ?? 'Muslim World League' },
-    { id: 'notifications', icon: Bell, label: 'Notifications', desc: 'Configure reminders' },
-    { id: 'privacy', icon: Shield, label: 'Privacy', desc: 'Your data, your control' },
-    ...(profile?.gender === 'female' ? [{ id: 'womens', icon: Moon, label: "Women's Mode", desc: profile?.womensModeEnabled ? 'Enabled' : 'Disabled' }] : []),
-    { id: 'about', icon: Info, label: 'About', desc: 'Version 0.2.0' },
+    { id: 'profile',       icon: User,    label: t('setting_profile'),       desc: profile?.name || t('label_optional') },
+    { id: 'appearance',    icon: Palette, label: t('setting_appearance'),    desc: profile?.theme?.replace('_', ' ') ?? 'Fajr Dark' },
+    { id: 'language',      icon: Globe,   label: t('setting_language'),      desc: (profile?.language?.toUpperCase() ?? 'EN') + ' · ' + (profile?.terminology ?? 'arabic') },
+    { id: 'calculation',   icon: Clock,   label: t('setting_calculation'),   desc: CALCULATION_METHOD_LABELS[profile?.calculationMethod as CalculationMethodKey] ?? 'Muslim World League' },
+    { id: 'notifications', icon: Bell,    label: t('setting_notifications'), desc: 'Configure reminders' },
+    { id: 'privacy',       icon: Shield,  label: t('setting_privacy'),       desc: 'Your data, your control' },
+    ...(profile?.gender === 'female' ? [{ id: 'womens', icon: Moon, label: t('setting_womens_mode'), desc: profile?.womensModeEnabled ? 'Enabled' : 'Disabled' }] : []),
+    { id: 'about',         icon: Info,    label: t('setting_about'),         desc: 'Version 0.2.0' },
   ] as const;
 
   return (
     <div className="min-h-screen pb-24 bg-[var(--bg-primary)]">
       <div className="sticky top-0 z-30 bg-[var(--bg-primary)]/95 backdrop-blur-sm border-b border-[var(--bg-secondary)]">
         <div className="max-w-lg mx-auto px-4 py-4">
-          <h1 className="font-display text-2xl text-[var(--text-primary)]">Settings</h1>
+          <h1 className="font-display text-2xl text-[var(--text-primary)]">{t('page_settings')}</h1>
         </div>
       </div>
 
@@ -129,7 +131,7 @@ export default function SettingsPage() {
               <Users size={20} className="text-[var(--accent-primary)]" />
             </div>
             <div className="flex-1 text-left">
-              <div className="text-[var(--text-primary)] font-medium">Family & Students</div>
+              <div className="text-[var(--text-primary)] font-medium">{t('setting_family')}</div>
               <div className="text-[var(--text-tertiary)] text-xs">Track prayers for family members and students</div>
             </div>
             <ChevronRight size={16} className="text-[var(--text-tertiary)]" />
@@ -143,7 +145,7 @@ export default function SettingsPage() {
               <Compass size={20} className="text-[var(--accent-primary)]" />
             </div>
             <div className="flex-1 text-left">
-              <div className="text-[var(--text-primary)] font-medium">Qibla Compass</div>
+              <div className="text-[var(--text-primary)] font-medium">{t('setting_qibla')}</div>
               <div className="text-[var(--text-tertiary)] text-xs">Find the direction of Makkah</div>
             </div>
             <ChevronRight size={16} className="text-[var(--text-tertiary)]" />
@@ -157,7 +159,7 @@ export default function SettingsPage() {
               <MapPin size={20} className="text-[var(--accent-primary)]" />
             </div>
             <div className="flex-1 text-left">
-              <div className="text-[var(--text-primary)] font-medium">Mosque Finder</div>
+              <div className="text-[var(--text-primary)] font-medium">{t('setting_mosque')}</div>
               <div className="text-[var(--text-tertiary)] text-xs">Find nearby mosques via OpenStreetMap</div>
             </div>
             <ChevronRight size={16} className="text-[var(--text-tertiary)]" />
@@ -171,7 +173,7 @@ export default function SettingsPage() {
               <Heart size={20} className="text-[var(--accent-primary)]" />
             </div>
             <div className="flex-1 text-left">
-              <div className="text-[var(--text-primary)] font-medium">Giving Hub</div>
+              <div className="text-[var(--text-primary)] font-medium">{t('setting_giving')}</div>
               <div className="text-[var(--text-tertiary)] text-xs">Zakat, sadaqa & fitrana</div>
             </div>
             <ChevronRight size={16} className="text-[var(--text-tertiary)]" />
@@ -196,7 +198,7 @@ export default function SettingsPage() {
             }}
             className="w-full flex items-center gap-3 p-3 rounded-xl border border-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:border-[var(--accent-secondary)] transition-colors"
           >
-            <Download size={16} /> Export all my data (JSON)
+            <Download size={16} /> {t('action_export_data')}
           </button>
         </div>
 

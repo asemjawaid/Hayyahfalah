@@ -22,6 +22,7 @@ import { useUserStore } from '@/store/user-store';
 import { formatPrayerTime } from '@/lib/prayer-engine';
 import { todayString, cn } from '@/lib/utils';
 import { DUAS, DUA_CATEGORIES, searchDuas, getDuasByCategory, type DuaCategory, type Dua } from '@/lib/duas';
+import { useT } from '@/lib/i18n';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -84,28 +85,37 @@ const TYPE_LABELS: Record<FastType, string> = {
 export default function HabitsPage() {
   const [tab, setTab] = useState<TabId>('today');
   const today = new Date();
+  const t = useT();
+
+  const TAB_LABELS: Record<TabId, string> = {
+    today: t('tab_today'),
+    quran: t('tab_quran'),
+    fast:  t('tab_fast'),
+    dhikr: t('tab_dhikr'),
+    dua:   t('tab_dua'),
+  };
 
   return (
     <div className="min-h-screen pb-24 bg-[var(--bg-primary)]">
       {/* Header */}
       <div className="sticky top-0 z-30 bg-[var(--bg-primary)]/95 backdrop-blur-sm border-b border-[var(--bg-secondary)]">
         <div className="max-w-lg mx-auto px-4 py-4">
-          <h1 className="font-display text-2xl text-[var(--text-primary)]">Habits & Growth</h1>
+          <h1 className="font-display text-2xl text-[var(--text-primary)]">{t('page_habits')}</h1>
           <p className="text-[var(--text-tertiary)] text-xs">{formatHijriDate(today)}</p>
         </div>
         <div className="max-w-lg mx-auto px-4 flex gap-2 pb-3 overflow-x-auto">
-          {TABS.map(t => (
+          {TABS.map(tab_ => (
             <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
+              key={tab_.id}
+              onClick={() => setTab(tab_.id)}
               className={cn(
                 'px-4 py-1.5 rounded-full text-sm font-medium transition-all whitespace-nowrap',
-                tab === t.id
+                tab === tab_.id
                   ? 'bg-[var(--accent-primary)] text-[#0D1421]'
                   : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)]',
               )}
             >
-              {t.label}
+              {TAB_LABELS[tab_.id]}
             </button>
           ))}
         </div>

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { AuthInitializer } from '@/components/auth/auth-initializer';
+import { LangInitializer } from '@/components/ui/lang-initializer';
 
 export const metadata: Metadata = {
   title: 'Hayya Falah — حَيَّ عَلَى الْفَلَاح',
@@ -36,6 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body suppressHydrationWarning className="bg-[var(--bg-primary)] text-[var(--text-primary)] min-h-screen antialiased">
         <AuthInitializer />
+        <LangInitializer />
         {children}
       </body>
     </html>

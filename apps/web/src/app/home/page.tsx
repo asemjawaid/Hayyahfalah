@@ -15,6 +15,7 @@ import { NightPrayerSection } from '@/components/home/night-prayer-section';
 import { QazaEstimationModal } from '@/components/home/qaza-estimation-modal';
 import { formatHijriDate, ISLAMIC_EVENTS, toHijri } from '@/lib/hijri';
 import { getPrayerLabel, getJumuahLabel } from '@/lib/terminology';
+import { useT } from '@/lib/i18n';
 import { todayString, formatDate } from '@/lib/utils';
 import type { PrayerName, PrayerStatus } from '@/lib/db';
 import { formatPrayerTime, calculatePrayerTimes } from '@/lib/prayer-engine';
@@ -300,6 +301,7 @@ export default function HomePage() {
     PRAYERS.map(p => `${todayLogs[p]?.status}-${todayLogs[p]?.qazaFinalized}`)
   ), selectedDate]);
 
+  const t = useT();
   const terminology = profile?.terminology ?? 'arabic';
   const totalQaza = Object.values(qazaLedger).reduce((sum, q) => sum + (q?.count ?? 0), 0);
   const displayDate = new Date(selectedDate + 'T12:00:00');
@@ -367,7 +369,7 @@ export default function HomePage() {
               : 'text-[var(--text-secondary)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)]'
             )}
           >
-            {isToday ? 'Today' : selectedDate}
+            {isToday ? t('label_today') : selectedDate}
           </button>
           <button onClick={() => changeDate('next')} disabled={isToday} className="p-1.5 rounded-lg hover:bg-[var(--bg-secondary)] transition-colors text-[var(--text-secondary)] disabled:opacity-30">
             <ChevronRight size={18} />
@@ -381,12 +383,12 @@ export default function HomePage() {
         {profile?.womensModeEnabled && activeCycle && !activeCycle.endDate && (
           <div className="bg-rose-500/10 border border-rose-500/20 rounded-2xl p-4 flex items-center justify-between">
             <div>
-              <div className="text-rose-400 text-sm font-medium">Cycle in progress</div>
-              <div className="text-[var(--text-tertiary)] text-xs">Prayers are excused. May Allah grant you ease.</div>
+              <div className="text-rose-400 text-sm font-medium">{t('label_cycle_active')}</div>
+              <div className="text-[var(--text-tertiary)] text-xs">{t('label_prayers_excused')}</div>
             </div>
             <button onClick={async () => { await endCycle(activeCycle.id, todayString()); setActiveCycle(null); }}
               className="text-xs text-rose-400 border border-rose-400/30 px-3 py-1.5 rounded-lg">
-              End cycle
+              {t('action_end_cycle')}
             </button>
           </div>
         )}
@@ -397,7 +399,7 @@ export default function HomePage() {
             className="bg-[var(--accent-primary)]/10 border border-[var(--accent-primary)]/20 rounded-xl px-4 py-2.5 flex items-center justify-between">
             <span className="text-[var(--accent-primary)] text-sm">Logging prayers for {selectedDate}</span>
             <button onClick={() => { setLocalSelectedDate(todayStr); setSelectedDate(todayStr); }}
-              className="text-[var(--accent-primary)] text-xs underline underline-offset-2">Back to today</button>
+              className="text-[var(--accent-primary)] text-xs underline underline-offset-2">{t('action_back_today')}</button>
           </motion.div>
         )}
 
@@ -426,7 +428,7 @@ export default function HomePage() {
                 {completedToday}<span className="text-[var(--text-tertiary)]">/5</span>
               </span>
               <span className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-tertiary)] font-medium mt-2">
-                {completedToday === 5 ? 'All done 🌟' : 'Completed'}
+                {completedToday === 5 ? t('label_all_done') : t('label_completed')}
               </span>
             </div>
           </div>
@@ -462,18 +464,18 @@ export default function HomePage() {
               </div>
             ) : times && nextPrayer ? (
               <div className="w-full flex items-center justify-between px-4 py-2.5 bg-[var(--bg-tertiary)] rounded-xl">
-                <span className="text-[10px] uppercase tracking-[0.14em] text-[var(--text-tertiary)] font-medium">Next</span>
+                <span className="text-[10px] uppercase tracking-[0.14em] text-[var(--text-tertiary)] font-medium">{t('label_next')}</span>
                 <span className="text-[var(--text-primary)] font-medium text-sm">{nextPrayerLabel}</span>
                 <span className="text-[var(--accent-primary)] text-sm font-mono">{formatPrayerTime(nextPrayer.time)}</span>
                 <span className="text-[var(--text-tertiary)] text-xs">in {countdown}</span>
               </div>
             ) : lat === null ? (
               <button onClick={locate} className="w-full py-2.5 bg-[var(--bg-tertiary)] rounded-xl text-[var(--accent-primary)] text-sm flex items-center justify-center gap-2">
-                <MapPin size={14} /> Enable location
+                <MapPin size={14} /> {t('label_enable_location')}
               </button>
             ) : (
               <div className="w-full py-2.5 bg-[var(--bg-tertiary)] rounded-xl text-center text-[var(--text-tertiary)] text-sm">
-                All prayers complete ✓
+                {t('label_all_prayers_done')}
               </div>
             )
           ) : (
@@ -487,9 +489,9 @@ export default function HomePage() {
         {isToday ? (
           <div className="grid grid-cols-3 gap-3">
             {[
-              { value: `${streak}d`, label: 'Streak' },
-              { value: `${thirtyDayRate}%`, label: '30-day rate' },
-              { value: `${totalQaza}`, label: 'Qaza left' },
+              { value: `${streak}d`, label: t('stat_streak') },
+              { value: `${thirtyDayRate}%`, label: t('stat_30day') },
+              { value: `${totalQaza}`, label: t('stat_qaza_left') },
             ].map(({ value, label }) => (
               <div key={label} className="bg-[var(--bg-secondary)] rounded-2xl px-3 py-4 border border-[var(--bg-tertiary)] text-center">
                 <p className="font-display text-2xl tabular-nums text-[var(--text-primary)]">{value}</p>
@@ -502,7 +504,7 @@ export default function HomePage() {
           <div className="flex justify-center">
             <div className="bg-[var(--bg-secondary)] rounded-2xl px-6 py-3 border border-[var(--bg-tertiary)] text-center">
               <p className="font-display text-2xl tabular-nums text-[var(--text-primary)]">{totalQaza}</p>
-              <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--text-tertiary)] font-medium mt-1">Qaza left (total)</p>
+              <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--text-tertiary)] font-medium mt-1">{t('stat_qaza_left')}</p>
             </div>
           </div>
         )}
@@ -546,30 +548,30 @@ export default function HomePage() {
 
           {/* Qaza Balance */}
           <div className="bg-[var(--bg-secondary)] rounded-3xl p-5 border border-[var(--bg-tertiary)] space-y-3">
-            <h3 className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-[0.18em]">Qaza Balance</h3>
+            <h3 className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-[0.18em]">{t('section_qaza_balance')}</h3>
             <div className="flex items-end gap-1.5">
               <span className="font-display text-4xl text-[var(--text-primary)] tabular-nums leading-none">{totalQaza}</span>
-              <span className="pb-0.5 text-xs text-[var(--text-tertiary)]">remaining</span>
+              <span className="pb-0.5 text-xs text-[var(--text-tertiary)]">{t('label_remaining')}</span>
             </div>
             <div className="border-t border-[var(--bg-tertiary)] pt-2">
               <button
                 onClick={() => setShowQazaEstimate(true)}
                 className="text-xs font-medium text-[var(--accent-primary)] hover:underline"
               >
-                Manage →
+                {t('action_manage')}
               </button>
             </div>
           </div>
 
           {/* Family Circle */}
           <div className="bg-[var(--bg-secondary)] rounded-3xl p-5 border border-[var(--bg-tertiary)] space-y-3">
-            <h3 className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-[0.18em]">Family Circle</h3>
+            <h3 className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-[0.18em]">{t('section_family_circle')}</h3>
             {profiles.length === 0 ? (
               <div className="space-y-2">
-                <p className="text-sm text-[var(--text-tertiary)] leading-snug">No members added yet.</p>
+                <p className="text-sm text-[var(--text-tertiary)] leading-snug">{t('label_no_members')}</p>
                 <div className="border-t border-[var(--bg-tertiary)] pt-2">
                   <Link href="/family" className="text-xs font-medium text-[var(--accent-primary)] hover:underline">
-                    Add first →
+                    {t('label_add_first')}
                   </Link>
                 </div>
               </div>
@@ -600,7 +602,7 @@ export default function HomePage() {
                 })}
                 <div className="border-t border-[var(--bg-tertiary)] pt-2">
                   <Link href="/family" className="text-xs font-medium text-[var(--accent-primary)] hover:underline">
-                    {profiles.length > 3 ? `+${profiles.length - 3} more →` : 'Manage →'}
+                    {profiles.length > 3 ? `+${profiles.length - 3} more →` : t('action_manage')}
                   </Link>
                 </div>
               </div>
@@ -614,14 +616,14 @@ export default function HomePage() {
             onClick={() => setShowQazaEstimate(true)}
             className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border border-[var(--bg-tertiary)] text-[var(--text-secondary)] text-sm hover:border-[var(--accent-primary)]/30 transition-colors"
           >
-            <Calculator size={16} /> Estimate Qaza
+            <Calculator size={16} /> {t('action_estimate_qaza')}
           </button>
           {profile?.womensModeEnabled && !activeCycle && (
             <button
               onClick={async () => { await startCycle(todayString()); const c = await getActiveCycle(); setActiveCycle(c ?? null); }}
               className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border border-rose-500/30 text-rose-400 text-sm hover:border-rose-500/60 transition-colors"
             >
-              Start cycle
+              {t('action_start_cycle')}
             </button>
           )}
         </div>

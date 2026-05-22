@@ -4,17 +4,19 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, CalendarDays, Heart, Settings, Sprout } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-const NAV_ITEMS = [
-  { href: '/home',   label: 'Home',     icon: Home },
-  { href: '/habits', label: 'Habits',   icon: Sprout },
-  { href: '/calendar', label: 'Calendar', icon: CalendarDays },
-  { href: '/giving', label: 'Giving',   icon: Heart },
-  { href: '/settings', label: 'Settings', icon: Settings },
-];
+import { useT } from '@/lib/i18n';
 
 export function BottomNav() {
   const pathname = usePathname();
+  const t = useT();
+
+  const NAV_ITEMS = [
+    { href: '/home',     label: t('nav_home'),     icon: Home },
+    { href: '/habits',   label: t('nav_habits'),   icon: Sprout },
+    { href: '/calendar', label: t('nav_calendar'), icon: CalendarDays },
+    { href: '/giving',   label: t('nav_giving'),   icon: Heart },
+    { href: '/settings', label: t('nav_settings'), icon: Settings },
+  ];
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-[var(--bg-secondary)] border-t border-[var(--bg-tertiary)] z-50 safe-area-bottom">
