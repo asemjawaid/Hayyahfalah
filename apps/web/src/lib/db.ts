@@ -575,6 +575,17 @@ export async function getMemberPrayerLogsForDate(profileId: string, date: string
     .toArray();
 }
 
+export async function getMemberLogsForDateRange(
+  profileId: string,
+  startDate: string,
+  endDate: string,
+): Promise<MemberPrayerLog[]> {
+  return db.memberPrayerLog
+    .where('profileId').equals(profileId)
+    .and(l => l.date >= startDate && l.date <= endDate)
+    .toArray();
+}
+
 export async function logMemberPrayer(log: Omit<MemberPrayerLog, 'id' | 'loggedAt'>): Promise<void> {
   const existing = await db.memberPrayerLog
     .where('profileId').equals(log.profileId)

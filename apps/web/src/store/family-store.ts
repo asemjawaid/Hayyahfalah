@@ -16,7 +16,7 @@ interface FamilyState {
   addProfile: (data: Omit<MemberProfile, 'id' | 'createdAt'>) => Promise<string>;
   removeProfile: (id: string) => Promise<void>;
   loadLogsForDate: (profileId: string, date: string) => Promise<void>;
-  logPrayer: (profileId: string, prayer: PrayerName, status: PrayerStatus, date: string) => Promise<void>;
+  logPrayer: (profileId: string, prayer: PrayerName, status: PrayerStatus, date: string, note?: string) => Promise<void>;
 }
 
 export const useFamilyStore = create<FamilyState>((set, get) => ({
@@ -51,8 +51,8 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
     set(s => ({ memberLogs: { ...s.memberLogs, [profileId]: map } }));
   },
 
-  logPrayer: async (profileId, prayer, status, date) => {
-    await dbLogMemberPrayer({ profileId, prayer, status, date });
+  logPrayer: async (profileId, prayer, status, date, note?) => {
+    await dbLogMemberPrayer({ profileId, prayer, status, date, note });
     await get().loadLogsForDate(profileId, date);
   },
 }));
