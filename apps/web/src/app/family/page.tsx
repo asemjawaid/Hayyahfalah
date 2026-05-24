@@ -1,17 +1,22 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Plus, Trash2, ChevronRight, Copy, Check, Info, Search, Loader2 } from 'lucide-react';
+import {
+  ArrowLeft, Plus, Trash2, ChevronRight, Copy, Check,
+  Info, Search, Loader2, Bell, Mail, UserPlus, X, UserCheck,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useFamilyStore } from '@/store/family-store';
 import { useAuthStore } from '@/store/auth-store';
 import { BottomNav } from '@/components/ui/nav';
 import { todayString } from '@/lib/utils';
 import { cn } from '@/lib/utils';
-import { getMemberLogsForDateRange } from '@/lib/db';
+import { getMemberLogsForDateRange, db } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
 import type { MemberRelationship, Gender, PrayerStatus } from '@/lib/db';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const PRAYERS = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'] as const;
 
@@ -27,12 +32,25 @@ const RELATIONSHIP_LABELS: Record<MemberRelationship, { label: string; emoji: st
 const AVATARS = ['😊', '🌙', '⭐', '🌸', '🌿', '🦋', '🌺', '🕊️', '🌟', '🦁', '🌈', '🍃'];
 
 const LINK_STATUS_BADGE = {
-  local:   { label: 'Local only',  color: 'text-[var(--text-tertiary)] bg-[var(--bg-tertiary)]' },
-  pending: { label: '📨 Code saved', color: 'text-amber-400 bg-amber-400/10' },
-  linked:  { label: '✓ Linked',     color: 'text-emerald-400 bg-emerald-400/10' },
+  local:   { label: 'Local only',     color: 'text-[var(--text-tertiary)] bg-[var(--bg-tertiary)]' },
+  pending: { label: '⏳ Request sent', color: 'text-amber-400 bg-amber-400/10' },
+  linked:  { label: '✓ Linked',        color: 'text-emerald-400 bg-emerald-400/10' },
 };
 
 const POSITIVE_STATUSES: PrayerStatus[] = ['on_time', 'late', 'jamaah', 'jamaah_home'];
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface CircleRequest {
+  id: string;
+  requester_id: string;
+  requester_name: string;
+  requester_code: string;
+  relationship: string;
+  created_at: string;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function getLast7Days(): string[] {
   return Array.from({ length: 7 }, (_, i) => {
@@ -50,13 +68,21 @@ function dotColorClass(count: number, date: string, today: string): string {
   return 'bg-emerald-400';
 }
 
+function relLabel(rel: string): string {
+  return RELATIONSHIP_LABELS[rel as MemberRelationship]?.label ?? rel;
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+
 export default function FamilyPage() {
   const { profiles, memberLogs, loadProfiles, loadLogsForDate, removeProfile } = useFamilyStore();
   const { user } = useAuthStore();
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [codeCopied, setCodeCopied] = useState(false);
-  const [showCodeInfo, setShowCodeInfo] = useState(false);
-  const [weekStats, setWeekStats] = useState<Record<string, Record<string, number>>>({});
+  const [showAddModal, setShowAddModal]     = useState(false);
+  const [codeCopied, setCodeCopied]         = useState(false);
+  const [showCodeInfo, setShowCodeInfo]     = useState(false);
+  const [weekStats, setWeekStats]           = useState<Record<string, Record<string, number>>>({});
+  const [incomingRequests, setIncomingRequests] = useState<CircleRequest[]>([]);
+  const [requestsChecked, setRequestsChecked]   = useState(false);
   const today = todayString();
   const days7 = getLast7Days();
 
@@ -68,20 +94,82 @@ export default function FamilyPage() {
     ? profileCode.slice(0, 4) + '-' + profileCode.slice(4)
     : null;
 
-  useEffect(() => {
-    loadProfiles();
-  }, []);
+  useEffect(() => { loadProfiles(); }, []);
 
   useEffect(() => {
     if (profiles.length === 0) return;
-    for (const p of profiles) {
-      loadLogsForDate(p.id, today);
-    }
+    for (const p of profiles) loadLogsForDate(p.id, today);
     loadWeekStats(profiles);
   }, [profiles.length]);
 
+  // Check Supabase circle requests whenever the user is available
+  const checkCircleRequests = useCallback(async () => {
+    if (!user) return;
+    try {
+      // ① Update local members whose outgoing requests were approved
+      const { data: approved } = await supabase
+        .from('circle_requests')
+        .select('local_member_id')
+        .eq('requester_id', user.id)
+        .eq('status', 'approved');
+
+      let anyUpdated = false;
+      for (const r of (approved ?? [])) {
+        if (r.local_member_id) {
+          const member = await db.memberProfiles.get(r.local_member_id);
+          if (member && member.linkStatus !== 'linked') {
+            await db.memberProfiles.put({ ...member, linkStatus: 'linked' });
+            anyUpdated = true;
+          }
+        }
+      }
+      if (anyUpdated) loadProfiles();
+
+      // ② Load incoming pending requests
+      const { data: incoming } = await supabase
+        .from('circle_requests')
+        .select('id, requester_id, requester_name, requester_code, relationship, created_at')
+        .eq('target_user_id', user.id)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+
+      setIncomingRequests(incoming ?? []);
+    } catch {
+      // Non-critical
+    }
+    setRequestsChecked(true);
+  }, [user]);
+
+  useEffect(() => {
+    checkCircleRequests();
+  }, [checkCircleRequests]);
+
+  // Real-time subscription for new incoming requests
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`circle_req_${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'circle_requests',
+          filter: `target_user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const r = payload.new as CircleRequest;
+          setIncomingRequests(prev => {
+            if (prev.some(x => x.id === r.id)) return prev;
+            return [r, ...prev];
+          });
+        },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
+
   async function loadWeekStats(profs: typeof profiles) {
-    if (profs.length === 0) return;
     const results: Record<string, Record<string, number>> = {};
     await Promise.all(profs.map(async (p) => {
       const logs = await getMemberLogsForDateRange(p.id, days7[0], days7[6]);
@@ -92,6 +180,22 @@ export default function FamilyPage() {
       results[p.id] = byDate;
     }));
     setWeekStats(results);
+  }
+
+  async function handleApprove(requestId: string) {
+    await supabase
+      .from('circle_requests')
+      .update({ status: 'approved', responded_at: new Date().toISOString() })
+      .eq('id', requestId);
+    setIncomingRequests(prev => prev.filter(r => r.id !== requestId));
+  }
+
+  async function handleDeny(requestId: string) {
+    await supabase
+      .from('circle_requests')
+      .update({ status: 'denied', responded_at: new Date().toISOString() })
+      .eq('id', requestId);
+    setIncomingRequests(prev => prev.filter(r => r.id !== requestId));
   }
 
   function copyCode() {
@@ -114,6 +218,15 @@ export default function FamilyPage() {
             <h1 className="font-display text-lg text-[var(--text-primary)]">Family & Students</h1>
             <p className="text-[var(--text-tertiary)] text-xs">Track prayers for those in your care</p>
           </div>
+          {/* Bell badge for incoming requests */}
+          {requestsChecked && incomingRequests.length > 0 && (
+            <div className="relative">
+              <Bell size={18} className="text-amber-400" />
+              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-amber-400 text-[#0D1421] text-[9px] font-bold rounded-full flex items-center justify-center">
+                {incomingRequests.length}
+              </span>
+            </div>
+          )}
           <button
             onClick={() => setShowAddModal(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--accent-primary)] text-[#0D1421] text-sm font-medium rounded-xl"
@@ -124,6 +237,33 @@ export default function FamilyPage() {
       </div>
 
       <div className="max-w-lg mx-auto px-4 pt-4 space-y-3">
+
+        {/* Incoming join requests */}
+        <AnimatePresence>
+          {requestsChecked && incomingRequests.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className="space-y-2"
+            >
+              <div className="flex items-center gap-1.5 text-amber-400">
+                <Bell size={12} />
+                <span className="text-xs font-semibold uppercase tracking-wide">
+                  Join requests ({incomingRequests.length})
+                </span>
+              </div>
+              {incomingRequests.map(req => (
+                <JoinRequestCard
+                  key={req.id}
+                  request={req}
+                  onApprove={() => handleApprove(req.id)}
+                  onDeny={() => handleDeny(req.id)}
+                />
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Your Profile Code — only visible when signed in */}
         {profileCode && (
@@ -144,18 +284,16 @@ export default function FamilyPage() {
                   'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all',
                   codeCopied
                     ? 'bg-emerald-400/20 text-emerald-400'
-                    : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                    : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]',
                 )}
               >
                 {codeCopied ? <Check size={11} /> : <Copy size={11} />}
                 {codeCopied ? 'Copied!' : 'Copy'}
               </button>
             </div>
-
             <div className="font-mono text-2xl font-bold text-[var(--accent-primary)] tracking-[0.2em]">
               {formattedCode}
             </div>
-
             <AnimatePresence>
               {showCodeInfo && (
                 <motion.p
@@ -164,7 +302,7 @@ export default function FamilyPage() {
                   exit={{ opacity: 0, height: 0 }}
                   className="overflow-hidden text-[var(--text-tertiary)] text-[11px] leading-relaxed"
                 >
-                  Share this code with your family members. When they add you on their device, they enter this code to link to your account — their prayer activity will show as confirmed.
+                  Share your code or email with family. When someone adds you by email, you'll get a notification here to approve or deny.
                 </motion.p>
               )}
             </AnimatePresence>
@@ -180,13 +318,10 @@ export default function FamilyPage() {
             <div className="flex-1 min-w-0">
               <p className="text-[var(--text-primary)] text-sm font-medium">Get a Profile Code</p>
               <p className="text-[var(--text-tertiary)] text-xs mt-0.5">
-                Sign in to get your shareable code so family can link to your account.
+                Sign in to link with family and receive join requests.
               </p>
             </div>
-            <Link
-              href="/auth"
-              className="text-[var(--accent-primary)] text-xs font-medium whitespace-nowrap"
-            >
+            <Link href="/auth" className="text-[var(--accent-primary)] text-xs font-medium whitespace-nowrap">
               Sign in →
             </Link>
           </div>
@@ -215,11 +350,11 @@ export default function FamilyPage() {
           </motion.div>
         ) : (
           profiles.map((p, i) => {
-            const todayLogs = memberLogs[p.id] ?? {};
+            const todayLogs  = memberLogs[p.id] ?? {};
             const completedToday = PRAYERS.filter(pr => todayLogs[pr]).length;
-            const rel = RELATIONSHIP_LABELS[p.relationship];
+            const rel        = RELATIONSHIP_LABELS[p.relationship];
             const memberWeek = weekStats[p.id] ?? {};
-            const badge = p.linkStatus ? LINK_STATUS_BADGE[p.linkStatus] : null;
+            const badge      = p.linkStatus ? LINK_STATUS_BADGE[p.linkStatus] : null;
 
             return (
               <motion.div
@@ -230,13 +365,11 @@ export default function FamilyPage() {
                 className="bg-[var(--bg-secondary)] rounded-2xl p-4"
               >
                 <div className="flex items-start gap-3">
-                  {/* Avatar */}
                   <div className="w-11 h-11 rounded-2xl bg-[var(--bg-tertiary)] flex items-center justify-center text-2xl flex-shrink-0">
                     {p.emoji}
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    {/* Name + badges */}
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-[var(--text-primary)]">{p.name}</span>
                       <span className="text-[10px] text-[var(--text-tertiary)] bg-[var(--bg-tertiary)] px-2 py-0.5 rounded-full whitespace-nowrap">
@@ -260,8 +393,8 @@ export default function FamilyPage() {
                               'w-4 h-4 rounded-full',
                               !log ? 'bg-[var(--bg-tertiary)]' :
                               ['on_time', 'jamaah', 'jamaah_home'].includes(log.status) ? 'bg-emerald-400' :
-                              log.status === 'late' ? 'bg-amber-400' :
-                              log.status === 'qaza' ? 'bg-purple-400' :
+                              log.status === 'late'   ? 'bg-amber-400' :
+                              log.status === 'qaza'   ? 'bg-purple-400' :
                               log.status === 'missed' ? 'bg-rose-500' :
                               'bg-zinc-500'
                             )}
@@ -280,11 +413,8 @@ export default function FamilyPage() {
                       {days7.map(date => (
                         <div
                           key={date}
-                          className={cn(
-                            'w-3 h-3 rounded-sm transition-colors',
-                            dotColorClass(memberWeek[date] ?? 0, date, today)
-                          )}
-                          title={`${new Date(date + 'T12:00').toLocaleDateString('en', { weekday: 'short', month: 'short', day: 'numeric' })}: ${memberWeek[date] ?? 0}/5 prayers`}
+                          className={cn('w-3 h-3 rounded-sm transition-colors', dotColorClass(memberWeek[date] ?? 0, date, today))}
+                          title={`${new Date(date + 'T12:00').toLocaleDateString('en', { weekday: 'short', month: 'short', day: 'numeric' })}: ${memberWeek[date] ?? 0}/5`}
                         />
                       ))}
                     </div>
@@ -322,10 +452,7 @@ export default function FamilyPage() {
         {showAddModal && (
           <AddMemberModal
             onClose={() => setShowAddModal(false)}
-            onDone={() => {
-              setShowAddModal(false);
-              // profiles.length will change → useEffect reloads week stats
-            }}
+            onDone={() => { setShowAddModal(false); checkCircleRequests(); }}
           />
         )}
       </AnimatePresence>
@@ -333,78 +460,186 @@ export default function FamilyPage() {
   );
 }
 
-// ── Add Member Modal ──────────────────────────────────────────────────────────
+// ─── Join Request Card ────────────────────────────────────────────────────────
 
-type CodeStatus = 'idle' | 'checking' | 'found' | 'notfound';
+function JoinRequestCard({
+  request,
+  onApprove,
+  onDeny,
+}: {
+  request: CircleRequest;
+  onApprove: () => void;
+  onDeny: () => void;
+}) {
+  const [acting, setActing] = useState<'approve' | 'deny' | null>(null);
+  const reqName = request.requester_name || 'Someone';
+  const relText = relLabel(request.relationship);
+  const code    = request.requester_code
+    ? request.requester_code.slice(0, 4) + '-' + request.requester_code.slice(4)
+    : null;
+
+  async function approve() {
+    setActing('approve');
+    await onApprove();
+  }
+  async function deny() {
+    setActing('deny');
+    await onDeny();
+  }
+
+  return (
+    <div className="bg-amber-400/5 border border-amber-400/20 rounded-2xl p-4 space-y-3">
+      <div className="flex items-start gap-3">
+        <div className="w-9 h-9 rounded-full bg-amber-400/15 flex items-center justify-center flex-shrink-0">
+          <UserPlus size={16} className="text-amber-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[var(--text-primary)] text-sm font-medium leading-snug">
+            {reqName} wants to add you as <span className="text-[var(--accent-primary)]">{relText}</span>
+          </p>
+          {code && (
+            <p className="text-[var(--text-tertiary)] text-xs mt-0.5 font-mono">{code}</p>
+          )}
+          <p className="text-[var(--text-tertiary)] text-xs mt-0.5">
+            {new Date(request.created_at).toLocaleDateString('en', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          onClick={approve}
+          disabled={!!acting}
+          className="flex-1 py-2.5 rounded-xl bg-emerald-500 text-white text-sm font-semibold flex items-center justify-center gap-1.5 disabled:opacity-60"
+        >
+          {acting === 'approve'
+            ? <Loader2 size={14} className="animate-spin" />
+            : <UserCheck size={14} />
+          }
+          Approve
+        </button>
+        <button
+          onClick={deny}
+          disabled={!!acting}
+          className="flex-1 py-2.5 rounded-xl bg-[var(--bg-tertiary)] text-[var(--text-secondary)] text-sm font-medium flex items-center justify-center gap-1.5 disabled:opacity-60"
+        >
+          {acting === 'deny'
+            ? <Loader2 size={14} className="animate-spin" />
+            : <X size={14} />
+          }
+          Decline
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Add Member Modal ─────────────────────────────────────────────────────────
+
+type AddMode   = 'account' | 'local';
+type EmailStatus = 'idle' | 'checking' | 'found' | 'notfound';
+
+interface FoundProfile {
+  id: string;
+  email: string;
+  display_name: string | null;
+  profile_code: string;
+}
 
 function AddMemberModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const { addProfile } = useFamilyStore();
-  const [name, setName] = useState('');
+  const { user }       = useAuthStore();
+
+  // Mode
+  const [mode, setMode] = useState<AddMode>(user ? 'account' : 'local');
+
+  // Common fields
+  const [name,         setName]         = useState('');
   const [relationship, setRelationship] = useState<MemberRelationship>('child');
-  const [gender, setGender] = useState<Gender>('male');
-  const [emoji, setEmoji] = useState('😊');
-  const [profileCode, setProfileCode] = useState('');
-  const [codeStatus, setCodeStatus] = useState<CodeStatus>('idle');
-  const [foundUserId, setFoundUserId] = useState<string | null>(null);
+  const [gender,       setGender]       = useState<Gender>('male');
+  const [emoji,        setEmoji]        = useState('😊');
+
+  // Account mode — email search
+  const [email,        setEmail]        = useState('');
+  const [emailStatus,  setEmailStatus]  = useState<EmailStatus>('idle');
+  const [foundProfile, setFoundProfile] = useState<FoundProfile | null>(null);
+
   const [saving, setSaving] = useState(false);
 
-  // Validate the profile code against Supabase when input is complete (8 chars)
-  async function checkProfileCode(raw: string) {
-    const code = raw.replace(/-/g, '').toUpperCase();
-    if (code.length < 8) {
-      setCodeStatus('idle');
-      setFoundUserId(null);
+  async function searchByEmail(val: string) {
+    setEmail(val);
+    setFoundProfile(null);
+    const trimmed = val.trim().toLowerCase();
+    if (!trimmed.includes('@') || trimmed.length < 5) {
+      setEmailStatus('idle');
       return;
     }
-    setCodeStatus('checking');
+    setEmailStatus('checking');
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id')
-        .eq('profile_code', code)
+        .select('id, email, display_name, profile_code')
+        .eq('email', trimmed)
         .single();
       if (error || !data) {
-        setCodeStatus('notfound');
-        setFoundUserId(null);
+        setEmailStatus('notfound');
       } else {
-        setCodeStatus('found');
-        setFoundUserId(data.id);
+        setEmailStatus('found');
+        setFoundProfile(data as FoundProfile);
+        // Auto-fill name from display_name if blank
+        if (data.display_name && !name) setName(data.display_name);
       }
     } catch {
-      setCodeStatus('notfound');
-      setFoundUserId(null);
-    }
-  }
-
-  function handleCodeChange(raw: string) {
-    // Allow digits + letters + dash, max 9 chars (XXXX-XXXX)
-    const cleaned = raw.replace(/[^A-Za-z0-9-]/g, '').toUpperCase().slice(0, 9);
-    setProfileCode(cleaned);
-    const stripped = cleaned.replace(/-/g, '');
-    if (stripped.length === 8) {
-      checkProfileCode(stripped);
-    } else {
-      setCodeStatus('idle');
-      setFoundUserId(null);
+      setEmailStatus('notfound');
     }
   }
 
   async function handleSave() {
     if (!name.trim()) return;
     setSaving(true);
-    const stripped = profileCode.replace(/-/g, '').toUpperCase();
-    await addProfile({
-      name: name.trim(),
-      emoji,
-      relationship,
-      gender,
-      linkedUserId: foundUserId || undefined,
-      linkedEmail: stripped || undefined,
-      linkStatus: codeStatus === 'found' ? 'linked' : stripped ? 'pending' : 'local',
-    });
-    setSaving(false);
+    try {
+      if (mode === 'account' && foundProfile && user) {
+        // Create local member first to get its ID
+        const localId = await addProfile({
+          name:         name.trim(),
+          emoji,
+          relationship,
+          gender,
+          linkStatus:   'pending',
+          linkedUserId: foundProfile.id,
+          linkedEmail:  foundProfile.email,
+        });
+
+        // Send circle request
+        const myCode = user.id.replace(/-/g, '').slice(0, 8).toUpperCase();
+        await supabase.from('circle_requests').upsert(
+          {
+            requester_id:    user.id,
+            requester_name:  user.email ?? '',
+            requester_code:  myCode,
+            target_user_id:  foundProfile.id,
+            relationship,
+            local_member_id: localId,
+            status:          'pending',
+          },
+          { onConflict: 'requester_id,target_user_id' },
+        );
+      } else {
+        // Local-only member
+        await addProfile({ name: name.trim(), emoji, relationship, gender, linkStatus: 'local' });
+      }
+    } finally {
+      setSaving(false);
+    }
     onDone();
   }
+
+  const canSave = name.trim().length > 0 &&
+    (mode === 'local' || (mode === 'account' && emailStatus === 'found'));
+
+  const fmtCode = foundProfile?.profile_code
+    ? foundProfile.profile_code.slice(0, 4) + '-' + foundProfile.profile_code.slice(4)
+    : null;
 
   return (
     <motion.div
@@ -419,16 +654,115 @@ function AddMemberModal({ onClose, onDone }: { onClose: () => void; onDone: () =
         animate={{ y: 0 }}
         exit={{ y: '100%' }}
         transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-        className="w-full max-w-lg mx-auto bg-[var(--bg-secondary)] rounded-t-3xl p-6 space-y-5 max-h-[90vh] overflow-y-auto"
+        className="w-full max-w-lg mx-auto bg-[var(--bg-secondary)] rounded-t-3xl p-6 space-y-5 max-h-[92vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}
       >
         <div className="w-8 h-1 bg-[var(--bg-tertiary)] rounded-full mx-auto" />
         <h3 className="font-display text-xl text-[var(--text-primary)]">Add Member</h3>
 
+        {/* Mode selector — only when signed in */}
+        {user && (
+          <div className="flex gap-2 p-1 bg-[var(--bg-tertiary)] rounded-xl">
+            <button
+              onClick={() => setMode('account')}
+              className={cn(
+                'flex-1 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1.5',
+                mode === 'account'
+                  ? 'bg-[var(--bg-secondary)] text-[var(--text-primary)] shadow-sm'
+                  : 'text-[var(--text-tertiary)]',
+              )}
+            >
+              <Mail size={13} /> By email
+            </button>
+            <button
+              onClick={() => setMode('local')}
+              className={cn(
+                'flex-1 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1.5',
+                mode === 'local'
+                  ? 'bg-[var(--bg-secondary)] text-[var(--text-primary)] shadow-sm'
+                  : 'text-[var(--text-tertiary)]',
+              )}
+            >
+              <UserPlus size={13} /> Manually
+            </button>
+          </div>
+        )}
+
+        {/* Account mode — email search */}
+        {mode === 'account' && user && (
+          <div>
+            <label className="text-[var(--text-secondary)] text-xs uppercase tracking-wide mb-1.5 block">
+              Their email address
+            </label>
+            <div className="relative">
+              <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]" />
+              <input
+                type="email"
+                inputMode="email"
+                value={email}
+                onChange={e => searchByEmail(e.target.value)}
+                placeholder="name@example.com"
+                className={cn(
+                  'w-full pl-9 pr-10 py-3 rounded-xl bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none transition-all',
+                  emailStatus === 'found'    && 'ring-1 ring-emerald-400',
+                  emailStatus === 'notfound' && 'ring-1 ring-rose-400',
+                )}
+              />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                {emailStatus === 'checking' && <Loader2 size={16} className="animate-spin text-[var(--text-tertiary)]" />}
+                {emailStatus === 'found'    && <Check   size={16} className="text-emerald-400" />}
+                {emailStatus === 'notfound' && <Search  size={16} className="text-rose-400" />}
+              </div>
+            </div>
+
+            {/* Found profile confirmation */}
+            <AnimatePresence>
+              {emailStatus === 'found' && foundProfile && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="mt-2 p-3 bg-emerald-400/10 border border-emerald-400/30 rounded-xl flex items-center gap-3"
+                >
+                  <div className="w-8 h-8 rounded-full bg-emerald-400/20 flex items-center justify-center text-lg flex-shrink-0">
+                    {foundProfile.display_name
+                      ? foundProfile.display_name[0].toUpperCase()
+                      : '👤'}
+                  </div>
+                  <div className="min-w-0">
+                    {foundProfile.display_name && (
+                      <p className="text-[var(--text-primary)] text-sm font-medium">{foundProfile.display_name}</p>
+                    )}
+                    <p className="text-[var(--text-tertiary)] text-xs">{foundProfile.email}</p>
+                    {fmtCode && (
+                      <p className="text-emerald-400 text-xs font-mono">{fmtCode}</p>
+                    )}
+                  </div>
+                  <span className="ml-auto text-emerald-400 text-xs font-semibold shrink-0">✓ Found</span>
+                </motion.div>
+              )}
+              {emailStatus === 'notfound' && (
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="mt-1.5 text-[var(--text-tertiary)] text-[11px]"
+                >
+                  No account found with that email — they may not have signed up yet.
+                </motion.p>
+              )}
+              {emailStatus === 'idle' && (
+                <p className="mt-1.5 text-[var(--text-tertiary)] text-[11px]">
+                  They'll receive a notification to approve before being added to your circle.
+                </p>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+
         {/* Avatar picker */}
         <div>
           <label className="text-[var(--text-secondary)] text-xs uppercase tracking-wide mb-2 block">
-            Choose an avatar
+            Avatar
           </label>
           <div className="flex flex-wrap gap-2">
             {AVATARS.map(av => (
@@ -439,7 +773,7 @@ function AddMemberModal({ onClose, onDone }: { onClose: () => void; onDone: () =
                   'w-10 h-10 rounded-xl text-xl transition-all',
                   emoji === av
                     ? 'bg-[var(--accent-primary)] scale-110'
-                    : 'bg-[var(--bg-tertiary)] hover:bg-[var(--bg-primary)]'
+                    : 'bg-[var(--bg-tertiary)]',
                 )}
               >
                 {av}
@@ -450,7 +784,9 @@ function AddMemberModal({ onClose, onDone }: { onClose: () => void; onDone: () =
 
         {/* Name */}
         <div>
-          <label className="text-[var(--text-secondary)] text-xs uppercase tracking-wide mb-1 block">Name</label>
+          <label className="text-[var(--text-secondary)] text-xs uppercase tracking-wide mb-1 block">
+            Name <span className="text-[var(--text-tertiary)] normal-case">(how you know them)</span>
+          </label>
           <input
             type="text"
             value={name}
@@ -458,54 +794,6 @@ function AddMemberModal({ onClose, onDone }: { onClose: () => void; onDone: () =
             placeholder="e.g. Aisha, Ahmad, Student 1"
             className="w-full px-4 py-3 rounded-xl bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none"
           />
-        </div>
-
-        {/* Profile Code */}
-        <div>
-          <label className="text-[var(--text-secondary)] text-xs uppercase tracking-wide mb-1 block">
-            Their Profile Code <span className="text-[var(--text-tertiary)] normal-case">(optional)</span>
-          </label>
-          <div className="relative">
-            <input
-              type="text"
-              inputMode="text"
-              value={profileCode}
-              onChange={e => handleCodeChange(e.target.value)}
-              placeholder="XXXX-XXXX"
-              maxLength={9}
-              className={cn(
-                'w-full px-4 py-3 pr-10 rounded-xl bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none font-mono tracking-widest uppercase transition-all',
-                codeStatus === 'found' && 'ring-1 ring-emerald-400',
-                codeStatus === 'notfound' && 'ring-1 ring-rose-400',
-              )}
-            />
-            <div className="absolute right-3 top-1/2 -translate-y-1/2">
-              {codeStatus === 'checking' && (
-                <Loader2 size={16} className="animate-spin text-[var(--text-tertiary)]" />
-              )}
-              {codeStatus === 'found' && (
-                <Check size={16} className="text-emerald-400" />
-              )}
-              {codeStatus === 'notfound' && (
-                <Search size={16} className="text-rose-400" />
-              )}
-            </div>
-          </div>
-
-          {/* Code status feedback */}
-          <div className="mt-1.5 min-h-[16px]">
-            {codeStatus === 'found' && (
-              <p className="text-emerald-400 text-[11px]">✓ Account found — member will be marked as Linked</p>
-            )}
-            {codeStatus === 'notfound' && (
-              <p className="text-[var(--text-tertiary)] text-[11px]">Code not found — it will be saved and checked when they sign in</p>
-            )}
-            {codeStatus === 'idle' && profileCode.length === 0 && (
-              <p className="text-[var(--text-tertiary)] text-[11px]">
-                Ask them to open Settings → Profile to find their 8-character code
-              </p>
-            )}
-          </div>
         </div>
 
         {/* Relationship */}
@@ -521,13 +809,13 @@ function AddMemberModal({ onClose, onDone }: { onClose: () => void; onDone: () =
                     'py-2.5 px-2 rounded-xl text-sm text-center transition-all',
                     relationship === key
                       ? 'bg-[var(--accent-primary)] text-[#0D1421] font-medium'
-                      : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]'
+                      : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]',
                   )}
                 >
                   <div className="text-base">{re}</div>
                   <div className="text-xs mt-0.5">{label}</div>
                 </button>
-              )
+              ),
             )}
           </div>
         </div>
@@ -544,7 +832,7 @@ function AddMemberModal({ onClose, onDone }: { onClose: () => void; onDone: () =
                   'flex-1 py-2.5 rounded-xl text-sm font-medium capitalize transition-all',
                   gender === g
                     ? 'bg-[var(--accent-primary)] text-[#0D1421]'
-                    : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]'
+                    : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]',
                 )}
               >
                 {g}
@@ -553,13 +841,24 @@ function AddMemberModal({ onClose, onDone }: { onClose: () => void; onDone: () =
           </div>
         </div>
 
+        {/* Save */}
         <button
-          disabled={!name.trim() || saving}
+          disabled={!canSave || saving}
           onClick={handleSave}
-          className="w-full py-3 bg-[var(--accent-primary)] text-[#0D1421] font-semibold rounded-xl disabled:opacity-50 transition-opacity"
+          className="w-full py-3 bg-[var(--accent-primary)] text-[#0D1421] font-semibold rounded-xl disabled:opacity-50 transition-opacity flex items-center justify-center gap-2"
         >
-          {saving ? 'Adding…' : `Add ${name.trim() || 'Member'}`}
+          {saving && <Loader2 size={15} className="animate-spin" />}
+          {mode === 'account' && emailStatus === 'found'
+            ? saving ? 'Sending request…' : `Send join request to ${foundProfile?.display_name ?? foundProfile?.email?.split('@')[0] ?? 'them'}`
+            : saving ? 'Adding…' : `Add ${name.trim() || 'Member'} locally`
+          }
         </button>
+
+        {mode === 'account' && emailStatus === 'found' && (
+          <p className="text-center text-[var(--text-tertiary)] text-xs -mt-3">
+            They'll see a notification and can approve or decline.
+          </p>
+        )}
       </motion.div>
     </motion.div>
   );

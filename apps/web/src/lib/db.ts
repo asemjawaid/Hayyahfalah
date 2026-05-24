@@ -79,6 +79,8 @@ export interface PrayerLog {
    * it ever appearing as qaza debt.
    */
   qazaFinalized?: boolean;
+  /** Whether the associated rawatib sunnah was prayed alongside this fard. */
+  sunnahPrayed?: boolean;
 }
 
 export interface QazaLedger {
