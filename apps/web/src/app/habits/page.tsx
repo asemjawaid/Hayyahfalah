@@ -68,6 +68,15 @@ const DHIKR_OPTIONS = [
   { id: 'laylatul_qadr',   label: 'Dua of Forgiveness',   arabic: 'اللَّهُمَّ إِنَّكَ عَفُوٌّ تُحِبُّ الْعَفْوَ فَاعْفُ عَنِّي',                       transliteration: "Allāhumma innaka ʿafuwwun tuḥibbul-ʿafwa faʿfu ʿannī",                target: 100 },
 ];
 
+// Post-prayer tasbih sequence (SubhānAllāh×33, Alḥamdulillāh×33, Allāhu Akbar×34)
+const PRAYER_SEQUENCE = [
+  { id: 'subhanallah',   label: 'SubhānAllāh',   arabic: 'سُبْحَانَ اللَّه',  transliteration: 'SubḥānAllāh',   target: 33 },
+  { id: 'alhamdulillah', label: 'Alḥamdulillāh', arabic: 'الْحَمْدُ لِلَّه',  transliteration: 'Alḥamdulillāh', target: 33 },
+  { id: 'allahu_akbar',  label: 'Allāhu Akbar',   arabic: 'اللَّهُ أَكْبَر',   transliteration: 'Allāhu Akbar',   target: 34 },
+] as const;
+
+const TARGET_PRESETS = [7, 11, 33, 34, 99, 100, 300, 1000];
+
 const FAST_STATUS_CONFIG: Record<FastStatus, { label: string; color: string; icon: string }> = {
   completed: { label: 'Completed', color: 'text-emerald-400', icon: '✓' },
   partial:   { label: 'Partial',   color: 'text-amber-400',   icon: '◑' },
@@ -1122,15 +1131,251 @@ function FastLogSheet({
   );
 }
 
+// ─── Dhikr helpers ────────────────────────────────────────────────────────────
+
+function vibrate(pattern: number | number[]) {
+  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+    try { navigator.vibrate(pattern); } catch {}
+  }
+}
+
+// Dot grid for ≤34 targets, progress bar otherwise
+function ProgressVisual({ count, target, done }: { count: number; target: number; done: boolean }) {
+  if (target <= 34) {
+    return (
+      <div className="flex flex-wrap justify-center gap-1.5 py-1 max-w-xs">
+        {Array.from({ length: target }, (_, i) => (
+          <div
+            key={i}
+            className={cn(
+              'w-3.5 h-3.5 rounded-full transition-all duration-100',
+              i < count
+                ? done ? 'bg-emerald-400' : 'bg-[var(--accent-primary)]'
+                : 'bg-[var(--bg-tertiary)]',
+            )}
+          />
+        ))}
+      </div>
+    );
+  }
+  const pct = Math.min(1, count / target);
+  return (
+    <div className="w-full space-y-1">
+      <div className="h-2 bg-[var(--bg-tertiary)] rounded-full overflow-hidden">
+        <div
+          className={cn('h-full rounded-full transition-all duration-200', done ? 'bg-emerald-400' : 'bg-[var(--accent-primary)]')}
+          style={{ width: `${pct * 100}%` }}
+        />
+      </div>
+      <div className="flex justify-between text-xs text-[var(--text-tertiary)]">
+        <span>{count} / {target}</span>
+        {done && <span className="text-emerald-400">✓ Complete</span>}
+      </div>
+    </div>
+  );
+}
+
+// Custom target picker sheet
+function TargetPickerSheet({
+  current, dhikrLabel, onSelect, onClose,
+}: { current: number; dhikrLabel: string; onSelect: (n: number) => void; onClose: () => void }) {
+  const [custom, setCustom] = useState('');
+  const customVal = parseInt(custom, 10);
+  const customOk  = !isNaN(customVal) && customVal >= 1 && customVal <= 9999;
+
+  return (
+    <BottomSheet title={`Target for ${dhikrLabel}`} emoji="🎯" onClose={onClose}>
+      <div className="grid grid-cols-4 gap-2">
+        {TARGET_PRESETS.map(n => (
+          <button
+            key={n}
+            onClick={() => { onSelect(n); onClose(); }}
+            className={cn(
+              'py-3 rounded-xl font-semibold text-sm transition-all',
+              current === n
+                ? 'bg-[var(--accent-primary)] text-[#0D1421]'
+                : 'bg-[var(--bg-tertiary)] text-[var(--text-primary)]',
+            )}
+          >
+            {n}
+          </button>
+        ))}
+      </div>
+      <div className="space-y-2">
+        <label className="text-[var(--text-secondary)] text-xs uppercase tracking-wide">Custom</label>
+        <div className="flex gap-2">
+          <input
+            type="number"
+            min={1}
+            max={9999}
+            value={custom}
+            onChange={e => setCustom(e.target.value)}
+            placeholder="Enter number…"
+            className="flex-1 px-3 py-2.5 rounded-xl bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-sm focus:outline-none"
+          />
+          <button
+            disabled={!customOk}
+            onClick={() => { if (customOk) { onSelect(customVal); onClose(); } }}
+            className="px-4 py-2.5 rounded-xl bg-[var(--accent-primary)] text-[#0D1421] font-semibold text-sm disabled:opacity-40"
+          >
+            Set
+          </button>
+        </div>
+      </div>
+    </BottomSheet>
+  );
+}
+
+// Post-prayer tasbih (33+33+34) guided mode
+function PrayerTasbihMode({ today, onExit }: { today: string; onExit: () => void }) {
+  const [step,     setStep]     = useState(0);
+  const [count,    setCount]    = useState(0);
+  const [stepping, setStepping] = useState(false);
+  const [allDone,  setAllDone]  = useState(false);
+
+  const current = PRAYER_SEQUENCE[step];
+  const done    = count >= current.target;
+
+  async function tap() {
+    if (stepping || allDone) return;
+    const next = count + 1;
+    vibrate(10);
+    const habitId = `__dhikr_${current.id}__`;
+    const existing = await db.habitLogs.where('[habitId+date]').equals([habitId, today]).first();
+    await logHabitValue(habitId, today, (existing?.value ?? 0) + 1);
+    setCount(next);
+
+    if (next >= current.target) {
+      vibrate([50, 30, 50, 30, 50]);
+      if (step < PRAYER_SEQUENCE.length - 1) {
+        setStepping(true);
+        setTimeout(() => {
+          setStep(s => s + 1);
+          setCount(0);
+          setStepping(false);
+        }, 900);
+      } else {
+        setAllDone(true);
+      }
+    }
+  }
+
+  if (allDone) {
+    return (
+      <div className="bg-[var(--bg-secondary)] rounded-2xl p-8 flex flex-col items-center gap-5 text-center">
+        <div className="text-6xl">✨</div>
+        <div>
+          <div className="text-[var(--text-primary)] font-semibold text-lg">Tasbih Complete</div>
+          <div className="text-[var(--text-tertiary)] text-sm mt-1">
+            SubhānAllāh × 33 · Alḥamdulillāh × 33 · Allāhu Akbar × 34
+          </div>
+        </div>
+        <div className="bg-[var(--bg-tertiary)] rounded-xl px-4 py-3 text-[var(--text-tertiary)] text-xs italic leading-relaxed text-left">
+          "Whoever says SubḥānAllāh 33 times, Alḥamdulillāh 33 times and Allāhu Akbar 34 times
+          after every prayer — his sins will be forgiven even if they are as much as the foam of the sea."
+          <span className="block mt-1 not-italic text-[var(--text-tertiary)]/70">— Sahih Muslim 597</span>
+        </div>
+        <button
+          onClick={onExit}
+          className="w-full py-3 bg-[var(--accent-primary)] text-[#0D1421] font-semibold rounded-xl"
+        >
+          Done
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-[var(--bg-secondary)] rounded-2xl p-6 flex flex-col items-center gap-4">
+      {/* Header row */}
+      <div className="flex items-center justify-between w-full">
+        <span className="text-[var(--text-tertiary)] text-xs">Post-prayer tasbih</span>
+        <button onClick={onExit} className="text-[var(--text-tertiary)]"><X size={16} /></button>
+      </div>
+
+      {/* Step bar */}
+      <div className="flex gap-2 w-full">
+        {PRAYER_SEQUENCE.map((s, i) => (
+          <div
+            key={s.id}
+            className={cn(
+              'flex-1 h-1.5 rounded-full transition-all duration-300',
+              i < step  ? 'bg-emerald-400'
+              : i === step ? 'bg-[var(--accent-primary)]'
+              : 'bg-[var(--bg-tertiary)]',
+            )}
+          />
+        ))}
+      </div>
+
+      {/* Current dhikr */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={step}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          className="text-center space-y-1"
+        >
+          <div className="font-arabic text-2xl text-[var(--accent-primary)]">{current.arabic}</div>
+          <div className="text-[var(--text-tertiary)] text-xs italic">{current.transliteration}</div>
+          <div className="text-[var(--text-secondary)] text-sm font-medium">{current.label}</div>
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Count display */}
+      <motion.div
+        key={`${step}-${count}`}
+        initial={{ scale: 1.15 }}
+        animate={{ scale: 1 }}
+        transition={{ duration: 0.08 }}
+        className="text-7xl font-bold tabular-nums"
+        style={{ color: stepping ? 'var(--accent-primary)' : 'var(--text-primary)' }}
+      >
+        {stepping ? '✓' : count}
+      </motion.div>
+
+      {/* Dot progress */}
+      <ProgressVisual count={stepping ? current.target : count} target={current.target} done={done} />
+
+      {/* Tap button */}
+      <motion.button
+        whileTap={{ scale: 0.93 }}
+        onClick={tap}
+        disabled={stepping}
+        className={cn(
+          'w-36 h-36 rounded-full flex items-center justify-center text-5xl font-light select-none transition-colors duration-200',
+          stepping ? 'bg-emerald-500 text-white' : 'bg-[var(--accent-primary)] text-[#0D1421]',
+        )}
+      >
+        {stepping ? '✓' : '+'}
+      </motion.button>
+
+      <div className="text-[var(--text-tertiary)] text-xs">
+        Step {step + 1} of {PRAYER_SEQUENCE.length} · {count} / {current.target}
+      </div>
+    </div>
+  );
+}
+
 // ─── Dhikr Tab ────────────────────────────────────────────────────────────────
 
 function DhikrTab() {
-  const [selected, setSelected] = useState(DHIKR_OPTIONS[0]);
-  const [count,    setCount]    = useState(0);
-  const [allCounts, setAllCounts] = useState<Record<string, number>>({});
+  const [selected,         setSelected]         = useState(DHIKR_OPTIONS[0]);
+  const [count,            setCount]            = useState(0);
+  const [allCounts,        setAllCounts]        = useState<Record<string, number>>({});
+  const [customTargets,    setCustomTargets]    = useState<Record<string, number>>({});
+  const [showTargetPicker, setShowTargetPicker] = useState(false);
+  const [prayerMode,       setPrayerMode]       = useState(false);
+  const [showCelebration,  setShowCelebration]  = useState(false);
   const today = todayString();
 
-  const habitId = `__dhikr_${selected.id}__`;
+  const habitId        = `__dhikr_${selected.id}__`;
+  const effectiveTarget = customTargets[selected.id] ?? selected.target;
+  const rounds         = Math.floor(count / effectiveTarget);
+  const remInRound     = count % effectiveTarget;
+  const progressCount  = rounds > 0 && remInRound === 0 ? effectiveTarget : remInRound;
+  const done           = count >= effectiveTarget;
 
   const loadAll = useCallback(async () => {
     const counts: Record<string, number> = {};
@@ -1152,7 +1397,13 @@ function DhikrTab() {
     const next = count + 1;
     setCount(next);
     setAllCounts(prev => ({ ...prev, [selected.id]: next }));
+    vibrate(10);
     await logHabitValue(habitId, today, next);
+    if (next % effectiveTarget === 0) {
+      vibrate([50, 30, 50, 30, 50]);
+      setShowCelebration(true);
+      setTimeout(() => setShowCelebration(false), 1600);
+    }
   }
 
   async function reset() {
@@ -1170,37 +1421,112 @@ function DhikrTab() {
     }
   }
 
-  const progress = Math.min(1, count / selected.target);
-  const done     = count >= selected.target;
+  if (prayerMode) {
+    return (
+      <div className="space-y-4">
+        <PrayerTasbihMode today={today} onExit={() => { setPrayerMode(false); loadAll(); }} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
-      {/* Dhikr selector pills */}
-      <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-        {DHIKR_OPTIONS.map(d => (
-          <button
-            key={d.id}
-            onClick={() => {
-              setSelected(d);
-              setCount(allCounts[d.id] ?? 0);
-            }}
-            className={cn(
-              'px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all flex-shrink-0',
-              selected.id === d.id
-                ? 'bg-[var(--accent-primary)] text-[#0D1421]'
-                : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)]',
-            )}
-          >
-            {d.label}
-          </button>
-        ))}
+      {/* Post-prayer tasbih shortcut */}
+      <button
+        onClick={() => setPrayerMode(true)}
+        className="w-full py-3 px-4 bg-[var(--bg-secondary)] rounded-2xl flex items-center justify-center gap-2 text-sm text-[var(--text-secondary)] border border-[var(--bg-tertiary)] active:scale-[0.98] transition-transform"
+      >
+        <span className="text-base">🕌</span>
+        <span className="font-medium">Post-prayer tasbih</span>
+        <span className="text-[var(--text-tertiary)] text-xs ml-1">33 + 33 + 34</span>
+      </button>
+
+      {/* Dhikr selector — 2-column grid */}
+      <div className="grid grid-cols-2 gap-2">
+        {DHIKR_OPTIONS.map(d => {
+          const c   = allCounts[d.id] ?? 0;
+          const tgt = customTargets[d.id] ?? d.target;
+          const pct = Math.min(1, c / tgt);
+          const isSelected = selected.id === d.id;
+          const isDone     = c >= tgt;
+          return (
+            <button
+              key={d.id}
+              onClick={() => { setSelected(d); setCount(allCounts[d.id] ?? 0); }}
+              className={cn(
+                'relative rounded-xl p-3 text-left transition-all overflow-hidden',
+                isSelected
+                  ? 'bg-[var(--accent-primary)]/10 ring-1 ring-[var(--accent-primary)]'
+                  : 'bg-[var(--bg-secondary)]',
+              )}
+            >
+              {/* Progress fill layer */}
+              {pct > 0 && (
+                <div
+                  className="absolute inset-0 rounded-xl pointer-events-none"
+                  style={{
+                    background: `linear-gradient(to right, ${isDone ? 'rgb(52 211 153)' : 'var(--accent-primary)'} ${pct * 100}%, transparent ${pct * 100}%)`,
+                    opacity: 0.08,
+                  }}
+                />
+              )}
+              <div className="relative">
+                <div className={cn(
+                  'text-xs font-semibold leading-snug',
+                  isSelected ? 'text-[var(--accent-primary)]' : 'text-[var(--text-primary)]',
+                )}>
+                  {d.label}
+                </div>
+                <div className="font-arabic text-xs text-[var(--text-tertiary)] mt-0.5 truncate text-right">
+                  {d.arabic.length > 12 ? d.arabic.slice(0, 12) + '…' : d.arabic}
+                </div>
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-[var(--text-tertiary)] text-xs tabular-nums">
+                    {c > 0 ? `${c}×` : `–`}
+                  </span>
+                  {isDone
+                    ? <span className="text-emerald-400 text-xs font-bold">✓</span>
+                    : c > 0 && <span className="text-[var(--text-tertiary)] text-xs">/{tgt}</span>
+                  }
+                </div>
+              </div>
+            </button>
+          );
+        })}
       </div>
 
       {/* Main counter card */}
-      <div className="bg-[var(--bg-secondary)] rounded-2xl p-6 flex flex-col items-center gap-4">
-        {/* Arabic text + transliteration */}
-        <div className="text-center space-y-1">
-          <div className="font-arabic text-xl text-[var(--accent-primary)]">
+      <div className="bg-[var(--bg-secondary)] rounded-2xl p-6 flex flex-col items-center gap-4 relative overflow-hidden">
+        {/* Celebration overlay */}
+        <AnimatePresence>
+          {showCelebration && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-2xl bg-[var(--bg-secondary)]/90"
+            >
+              <motion.div
+                initial={{ scale: 0.5 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                className="text-center"
+              >
+                <div className="text-5xl mb-2">{rounds > 1 ? '🌟' : '🌙'}</div>
+                <div className="text-[var(--accent-primary)] font-semibold">
+                  {rounds > 1 ? `Round ${rounds} complete!` : 'Target reached!'}
+                </div>
+                <div className="text-[var(--text-tertiary)] text-sm mt-0.5">
+                  {effectiveTarget}× {selected.label}
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Arabic + transliteration */}
+        <div className="text-center space-y-0.5">
+          <div className="font-arabic text-2xl text-[var(--accent-primary)] leading-relaxed">
             {selected.arabic}
           </div>
           <div className="text-[var(--text-tertiary)] text-xs italic">
@@ -1208,33 +1534,50 @@ function DhikrTab() {
           </div>
         </div>
 
-        {/* Count */}
-        <div className="text-7xl font-bold text-[var(--text-primary)] tabular-nums">
-          {count}
-        </div>
+        {/* Rounds badge */}
+        {rounds > 0 && (
+          <div className="flex items-center gap-1.5 bg-[var(--bg-tertiary)] px-3 py-1 rounded-full">
+            <Flame size={12} className="text-amber-400" />
+            <span className="text-[var(--text-secondary)] text-xs font-semibold">
+              {rounds} round{rounds > 1 ? 's' : ''} complete
+            </span>
+          </div>
+        )}
 
-        {/* Progress bar */}
-        <div className="w-full space-y-1">
-          <div className="h-2 bg-[var(--bg-tertiary)] rounded-full overflow-hidden">
-            <div
-              className="h-full bg-[var(--accent-primary)] rounded-full transition-all duration-300"
-              style={{ width: `${progress * 100}%` }}
-            />
-          </div>
-          <div className="flex justify-between text-xs text-[var(--text-tertiary)]">
-            <span>{count} / {selected.target}</span>
-            {done && <span className="text-[var(--accent-primary)]">Target reached 🌙</span>}
-          </div>
+        {/* Count (total) */}
+        <motion.div
+          key={count}
+          initial={{ scale: 1.12 }}
+          animate={{ scale: 1 }}
+          transition={{ duration: 0.08 }}
+          className="text-7xl font-bold text-[var(--text-primary)] tabular-nums"
+        >
+          {count}
+        </motion.div>
+
+        {/* Progress visual */}
+        <ProgressVisual count={progressCount} target={effectiveTarget} done={done} />
+
+        {/* Target picker trigger */}
+        <div className="flex items-center gap-2">
+          <span className="text-[var(--text-tertiary)] text-xs">Target:</span>
+          <button
+            onClick={() => setShowTargetPicker(true)}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-[var(--bg-tertiary)] text-[var(--text-secondary)] text-xs font-semibold"
+          >
+            {effectiveTarget}
+            <ChevronDown size={11} />
+          </button>
         </div>
 
         {/* Big tap button */}
         <motion.button
-          whileTap={{ scale: 0.93 }}
+          whileTap={{ scale: 0.92 }}
           onClick={increment}
           className={cn(
-            'w-36 h-36 rounded-full flex items-center justify-center text-5xl font-light transition-all duration-150',
+            'w-36 h-36 rounded-full flex items-center justify-center text-5xl font-light select-none transition-colors duration-150',
             done
-              ? 'bg-[var(--accent-primary)]/80 text-[#0D1421]'
+              ? 'bg-emerald-500 text-white'
               : 'bg-[var(--accent-primary)] text-[#0D1421]',
           )}
           aria-label="Count dhikr"
@@ -1265,32 +1608,53 @@ function DhikrTab() {
           <div className="text-[var(--text-secondary)] text-xs uppercase tracking-wide mb-3">
             Today's dhikr
           </div>
-          <div className="space-y-2">
-            {DHIKR_OPTIONS.filter(d => (allCounts[d.id] ?? 0) > 0).map(d => (
-              <div key={d.id} className="flex items-center justify-between text-sm">
-                <span className="text-[var(--text-primary)]">{d.label}</span>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="h-1.5 rounded-full bg-[var(--accent-primary)]"
-                    style={{ width: `${Math.min(80, ((allCounts[d.id] ?? 0) / d.target) * 80)}px` }}
-                  />
-                  <span className="text-[var(--text-tertiary)] tabular-nums w-12 text-right">
-                    {allCounts[d.id]}×
-                  </span>
+          <div className="space-y-2.5">
+            {DHIKR_OPTIONS.filter(d => (allCounts[d.id] ?? 0) > 0).map(d => {
+              const c   = allCounts[d.id] ?? 0;
+              const tgt = customTargets[d.id] ?? d.target;
+              const isDone = c >= tgt;
+              return (
+                <div key={d.id} className="flex items-center justify-between text-sm gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {isDone && <span className="text-emerald-400 text-xs shrink-0">✓</span>}
+                    <span className="text-[var(--text-primary)] truncate">{d.label}</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div
+                      className={cn('h-1.5 rounded-full', isDone ? 'bg-emerald-400' : 'bg-[var(--accent-primary)]')}
+                      style={{ width: `${Math.min(72, (c / tgt) * 72)}px` }}
+                    />
+                    <span className="text-[var(--text-tertiary)] tabular-nums text-xs w-10 text-right">
+                      {c}×
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
 
       {/* Hadith nudge */}
       <div className="text-center py-2">
-        <p className="text-[var(--text-tertiary)] text-xs italic">
-          "The best words are four: SubhanAllah, Alhamdulillah, Lā ilāha illallāh, Allahu Akbar."
+        <p className="text-[var(--text-tertiary)] text-xs italic leading-relaxed">
+          "Two words are light on the tongue, heavy on the Scale, and beloved to the Most Merciful:
+          SubhānAllāhi wa biḥamdihī, SubhānAllāhi l-ʿAẓīm."
         </p>
-        <p className="text-[var(--text-tertiary)] text-xs mt-0.5">— Muslim</p>
+        <p className="text-[var(--text-tertiary)] text-xs mt-0.5">— Sahih al-Bukhari 6682 · Sahih Muslim 2694</p>
       </div>
+
+      {/* Target picker sheet */}
+      <AnimatePresence>
+        {showTargetPicker && (
+          <TargetPickerSheet
+            current={effectiveTarget}
+            dhikrLabel={selected.label}
+            onSelect={n => setCustomTargets(prev => ({ ...prev, [selected.id]: n }))}
+            onClose={() => setShowTargetPicker(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
